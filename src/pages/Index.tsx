@@ -6,7 +6,7 @@ import { MiniCalendar } from "@/components/dashboard/MiniCalendar";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
 import { QuickActions } from "@/components/dashboard/QuickActions";
 import { ProfitSummary } from "@/components/dashboard/ProfitSummary";
-import { DollarSign, Users, Calendar, Receipt } from "lucide-react";
+import { DollarSign, TrendingUp, Calendar, Receipt } from "lucide-react";
 
 export default function Index() {
   return (
@@ -29,6 +29,13 @@ export default function Index() {
         {/* Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
+            title="Utilidad del Mes"
+            value="$4,250"
+            change={18}
+            icon={<TrendingUp className="w-6 h-6" />}
+            variant="success"
+          />
+          <StatCard
             title="Ventas de Hoy"
             value="$2,450"
             change={12}
@@ -40,13 +47,6 @@ export default function Index() {
             value="18"
             change={8}
             icon={<Calendar className="w-6 h-6" />}
-          />
-          <StatCard
-            title="Clientes Nuevos"
-            value="5"
-            change={25}
-            icon={<Users className="w-6 h-6" />}
-            variant="success"
           />
           <StatCard
             title="Gastos Totales"
