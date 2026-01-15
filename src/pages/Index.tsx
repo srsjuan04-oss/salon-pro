@@ -6,7 +6,7 @@ import { MiniCalendar } from "@/components/dashboard/MiniCalendar";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
 import { QuickActions } from "@/components/dashboard/QuickActions";
 import { ProfitSummary } from "@/components/dashboard/ProfitSummary";
-import { DollarSign, Users, Calendar, TrendingUp } from "lucide-react";
+import { DollarSign, Users, Calendar, Receipt } from "lucide-react";
 
 export default function Index() {
   return (
@@ -49,10 +49,10 @@ export default function Index() {
             variant="success"
           />
           <StatCard
-            title="Comisiones"
-            value="$367"
-            change={-3}
-            icon={<TrendingUp className="w-6 h-6" />}
+            title="Gastos Totales"
+            value="$8,200"
+            change={-5}
+            icon={<Receipt className="w-6 h-6" />}
             variant="info"
           />
         </div>
