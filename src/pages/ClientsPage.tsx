@@ -3,6 +3,7 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import { 
   UserPlus, 
   Search, 
@@ -13,6 +14,14 @@ import {
   Star
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
 
 interface Client {
   id: string;
@@ -92,6 +101,21 @@ const clients: Client[] = [
 
 export default function ClientsPage() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    vip: false,
+    tags: "",
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    console.log("Nuevo cliente:", formData);
+    setIsDialogOpen(false);
+    setFormData({ name: "", email: "", phone: "", vip: false, tags: "" });
+  };
 
   const filteredClients = clients.filter(client =>
     client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -109,7 +133,10 @@ export default function ClientsPage() {
               Gestiona tu base de clientes • {clients.length} clientes totales
             </p>
           </div>
-          <Button className="gradient-gold shadow-gold gap-2">
+          <Button 
+            className="gradient-gold shadow-gold gap-2"
+            onClick={() => setIsDialogOpen(true)}
+          >
             <UserPlus className="w-4 h-4" />
             Agregar Cliente
           </Button>
@@ -208,6 +235,82 @@ export default function ClientsPage() {
           ))}
         </div>
       </div>
+
+      {/* Dialog Agregar Cliente */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Agregar Cliente</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Nombre completo</Label>
+              <Input
+                id="name"
+                placeholder="Nombre del cliente"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="email">Correo electrónico</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="correo@ejemplo.com"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="phone">Teléfono</Label>
+              <Input
+                id="phone"
+                type="tel"
+                placeholder="+52 55 1234 5678"
+                value={formData.phone}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="tags">Servicios preferidos</Label>
+              <Input
+                id="tags"
+                placeholder="Ej: Corte, Coloración, Manicure (separados por coma)"
+                value={formData.tags}
+                onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
+              />
+            </div>
+
+            <div className="flex items-center justify-between py-2">
+              <div className="space-y-0.5">
+                <Label htmlFor="vip">Cliente VIP</Label>
+                <p className="text-sm text-muted-foreground">Marcar como cliente preferencial</p>
+              </div>
+              <Switch
+                id="vip"
+                checked={formData.vip}
+                onCheckedChange={(checked) => setFormData({ ...formData, vip: checked })}
+              />
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" className="gradient-gold shadow-gold">
+                Guardar Cliente
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
