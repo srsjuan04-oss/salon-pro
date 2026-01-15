@@ -3,6 +3,22 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Plus, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const hours = Array.from({ length: 12 }, (_, i) => i + 8);
 
@@ -28,8 +44,35 @@ const appointments = [
 const daysOfWeek = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 const dates = [12, 13, 14, 15, 16, 17, 18];
 
+const services = [
+  "Corte de cabello",
+  "Corte + Tinte",
+  "Corte + Barba",
+  "Manicure",
+  "Pedicure",
+  "Tratamiento capilar",
+  "Coloración",
+  "Fade",
+];
+
 export default function CalendarPage() {
   const [selectedDay, setSelectedDay] = useState(0);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [formData, setFormData] = useState({
+    client: "",
+    service: "",
+    staffId: "",
+    date: "",
+    time: "",
+    duration: "1",
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    console.log("Nueva cita:", formData);
+    setIsDialogOpen(false);
+    setFormData({ client: "", service: "", staffId: "", date: "", time: "", duration: "1" });
+  };
 
   const getAppointmentStyle = (time: string, duration: number) => {
     const hour = parseInt(time.split(":")[0]);
@@ -57,7 +100,10 @@ export default function CalendarPage() {
               <img src="https://www.google.com/favicon.ico" alt="Google" className="w-4 h-4" />
               Sincronizar Google
             </Button>
-            <Button className="gradient-gold shadow-gold gap-2">
+            <Button 
+              className="gradient-gold shadow-gold gap-2"
+              onClick={() => setIsDialogOpen(true)}
+            >
               <Plus className="w-4 h-4" />
               Nueva Cita
             </Button>
@@ -193,6 +239,119 @@ export default function CalendarPage() {
           ))}
         </div>
       </div>
+
+      {/* Dialog Nueva Cita */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Nueva Cita</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="client">Cliente</Label>
+              <Input
+                id="client"
+                placeholder="Nombre del cliente"
+                value={formData.client}
+                onChange={(e) => setFormData({ ...formData, client: e.target.value })}
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="service">Servicio</Label>
+              <Select
+                value={formData.service}
+                onValueChange={(value) => setFormData({ ...formData, service: value })}
+                required
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar servicio" />
+                </SelectTrigger>
+                <SelectContent>
+                  {services.map((service) => (
+                    <SelectItem key={service} value={service}>
+                      {service}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="staff">Staff</Label>
+              <Select
+                value={formData.staffId}
+                onValueChange={(value) => setFormData({ ...formData, staffId: value })}
+                required
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar staff" />
+                </SelectTrigger>
+                <SelectContent>
+                  {staffMembers.map((staff) => (
+                    <SelectItem key={staff.id} value={staff.id}>
+                      {staff.name} - {staff.role}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="date">Fecha</Label>
+                <Input
+                  id="date"
+                  type="date"
+                  value={formData.date}
+                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="time">Hora</Label>
+                <Input
+                  id="time"
+                  type="time"
+                  value={formData.time}
+                  onChange={(e) => setFormData({ ...formData, time: e.target.value })}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="duration">Duración (horas)</Label>
+              <Select
+                value={formData.duration}
+                onValueChange={(value) => setFormData({ ...formData, duration: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Duración" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0.5">30 minutos</SelectItem>
+                  <SelectItem value="1">1 hora</SelectItem>
+                  <SelectItem value="1.5">1 hora 30 min</SelectItem>
+                  <SelectItem value="2">2 horas</SelectItem>
+                  <SelectItem value="2.5">2 horas 30 min</SelectItem>
+                  <SelectItem value="3">3 horas</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" className="gradient-gold shadow-gold">
+                Agendar Cita
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
