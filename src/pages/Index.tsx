@@ -5,6 +5,7 @@ import { StaffPerformance } from "@/components/dashboard/StaffPerformance";
 import { MiniCalendar } from "@/components/dashboard/MiniCalendar";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
 import { QuickActions } from "@/components/dashboard/QuickActions";
+import { ProfitSummary } from "@/components/dashboard/ProfitSummary";
 import { DollarSign, Users, Calendar, TrendingUp } from "lucide-react";
 
 export default function Index() {
@@ -66,6 +67,7 @@ export default function Index() {
 
           {/* Right Column */}
           <div className="space-y-6">
+            <ProfitSummary sales={12450} expenses={8200} />
             <QuickActions />
             <MiniCalendar />
             <StaffPerformance />

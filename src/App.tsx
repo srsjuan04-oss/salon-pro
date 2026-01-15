@@ -8,6 +8,7 @@ import CalendarPage from "./pages/CalendarPage";
 import ClientsPage from "./pages/ClientsPage";
 import StaffPage from "./pages/StaffPage";
 import SalesPage from "./pages/SalesPage";
+import ExpensesPage from "./pages/ExpensesPage";
 import WhatsAppPage from "./pages/WhatsAppPage";
 import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
@@ -26,6 +27,7 @@ const App = () => (
           <Route path="/clients" element={<ClientsPage />} />
           <Route path="/staff" element={<StaffPage />} />
           <Route path="/sales" element={<SalesPage />} />
+          <Route path="/expenses" element={<ExpensesPage />} />
           <Route path="/whatsapp" element={<WhatsAppPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<NotFound />} />

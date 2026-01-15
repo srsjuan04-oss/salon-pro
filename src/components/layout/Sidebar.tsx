@@ -6,6 +6,7 @@ import {
   Users, 
   UserCircle, 
   DollarSign, 
+  Receipt,
   MessageCircle,
   Settings,
   Scissors,
@@ -20,6 +21,7 @@ const menuItems = [
   { icon: Users, label: "Clientes", path: "/clients" },
   { icon: UserCircle, label: "Staff", path: "/staff" },
   { icon: DollarSign, label: "Ventas", path: "/sales" },
+  { icon: Receipt, label: "Gastos", path: "/expenses" },
   { icon: MessageCircle, label: "WhatsApp", path: "/whatsapp" },
   { icon: Settings, label: "Configuración", path: "/settings" },
 ];
