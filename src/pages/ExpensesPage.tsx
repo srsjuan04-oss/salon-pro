@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,22 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Plus, Filter, Download, Receipt, TrendingDown, Wallet, CreditCard } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
@@ -46,8 +63,25 @@ const categoryColors: Record<string, string> = {
   "Otros": "bg-muted text-muted-foreground",
 };
 
+const categories = ["Productos", "Salarios", "Servicios", "Alquiler", "Otros"];
+const paymentMethods = ["Efectivo", "Transferencia", "Débito", "Crédito"];
+
 export default function ExpensesPage() {
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [formData, setFormData] = useState({
+    description: "",
+    category: "",
+    amount: "",
+    paymentMethod: "",
+  });
+
   const totalExpenses = expensesByCategory.reduce((sum, cat) => sum + cat.value, 0);
+
+  const handleSubmit = () => {
+    console.log("Nuevo gasto:", formData);
+    setFormData({ description: "", category: "", amount: "", paymentMethod: "" });
+    setIsDialogOpen(false);
+  };
 
   return (
     <DashboardLayout>
@@ -69,12 +103,90 @@ export default function ExpensesPage() {
               <Download className="w-4 h-4 mr-2" />
               Exportar
             </Button>
-            <Button size="sm" className="gradient-gold text-primary-foreground">
+            <Button 
+              size="sm" 
+              className="gradient-gold text-primary-foreground"
+              onClick={() => setIsDialogOpen(true)}
+            >
               <Plus className="w-4 h-4 mr-2" />
               Nuevo Gasto
             </Button>
           </div>
         </div>
+
+        {/* Dialog for new expense */}
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Agregar Nuevo Gasto</DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="description">Descripción</Label>
+                <Input
+                  id="description"
+                  placeholder="Ej: Productos capilares"
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="category">Categoría</Label>
+                <Select
+                  value={formData.category}
+                  onValueChange={(value) => setFormData({ ...formData, category: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar categoría" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((cat) => (
+                      <SelectItem key={cat} value={cat}>
+                        {cat}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="amount">Monto</Label>
+                <Input
+                  id="amount"
+                  type="number"
+                  placeholder="0.00"
+                  value={formData.amount}
+                  onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="paymentMethod">Método de Pago</Label>
+                <Select
+                  value={formData.paymentMethod}
+                  onValueChange={(value) => setFormData({ ...formData, paymentMethod: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar método" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {paymentMethods.map((method) => (
+                      <SelectItem key={method} value={method}>
+                        {method}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleSubmit} className="gradient-gold text-primary-foreground">
+                Guardar Gasto
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
