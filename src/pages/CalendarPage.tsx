@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Plus, Clock } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Clock, DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Dialog,
@@ -65,13 +65,21 @@ export default function CalendarPage() {
     date: "",
     time: "",
     duration: "1",
+    price: "",
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     console.log("Nueva cita:", formData);
+    // Aquí se agregaría la lógica para guardar la cita y registrar la venta
+    console.log("Venta registrada:", { 
+      client: formData.client, 
+      service: formData.service, 
+      amount: parseFloat(formData.price) || 0,
+      date: formData.date 
+    });
     setIsDialogOpen(false);
-    setFormData({ client: "", service: "", staffId: "", date: "", time: "", duration: "1" });
+    setFormData({ client: "", service: "", staffId: "", date: "", time: "", duration: "1", price: "" });
   };
 
   const getAppointmentStyle = (time: string, duration: number) => {
@@ -321,24 +329,44 @@ export default function CalendarPage() {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="duration">Duración (horas)</Label>
-              <Select
-                value={formData.duration}
-                onValueChange={(value) => setFormData({ ...formData, duration: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Duración" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="0.5">30 minutos</SelectItem>
-                  <SelectItem value="1">1 hora</SelectItem>
-                  <SelectItem value="1.5">1 hora 30 min</SelectItem>
-                  <SelectItem value="2">2 horas</SelectItem>
-                  <SelectItem value="2.5">2 horas 30 min</SelectItem>
-                  <SelectItem value="3">3 horas</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="duration">Duración</Label>
+                <Select
+                  value={formData.duration}
+                  onValueChange={(value) => setFormData({ ...formData, duration: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Duración" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0.5">30 minutos</SelectItem>
+                    <SelectItem value="1">1 hora</SelectItem>
+                    <SelectItem value="1.5">1 hora 30 min</SelectItem>
+                    <SelectItem value="2">2 horas</SelectItem>
+                    <SelectItem value="2.5">2 horas 30 min</SelectItem>
+                    <SelectItem value="3">3 horas</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="price">Valor del servicio</Label>
+                <div className="relative">
+                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    id="price"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                    className="pl-9"
+                    value={formData.price}
+                    onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                    required
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">Este valor se registrará como venta</p>
+              </div>
             </div>
 
             <DialogFooter>
