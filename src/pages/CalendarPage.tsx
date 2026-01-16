@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Plus, Clock, DollarSign } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Clock, DollarSign, CreditCard, Banknote, Smartphone, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Dialog,
@@ -66,7 +66,15 @@ export default function CalendarPage() {
     time: "",
     duration: "1",
     price: "",
+    paymentMethod: "",
   });
+
+  const paymentMethods = [
+    { id: "cash", label: "Efectivo", icon: Banknote },
+    { id: "card", label: "Tarjeta", icon: CreditCard },
+    { id: "transfer", label: "Transferencia", icon: Smartphone },
+    { id: "pending", label: "Pendiente (Crédito)", icon: AlertCircle },
+  ];
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,10 +84,12 @@ export default function CalendarPage() {
       client: formData.client, 
       service: formData.service, 
       amount: parseFloat(formData.price) || 0,
-      date: formData.date 
+      date: formData.date,
+      paymentMethod: formData.paymentMethod,
+      isPending: formData.paymentMethod === "pending"
     });
     setIsDialogOpen(false);
-    setFormData({ client: "", service: "", staffId: "", date: "", time: "", duration: "1", price: "" });
+    setFormData({ client: "", service: "", staffId: "", date: "", time: "", duration: "1", price: "", paymentMethod: "" });
   };
 
   const getAppointmentStyle = (time: string, duration: number) => {
@@ -367,6 +377,41 @@ export default function CalendarPage() {
                 </div>
                 <p className="text-xs text-muted-foreground">Este valor se registrará como venta</p>
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Medio de pago</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {paymentMethods.map((method) => {
+                  const Icon = method.icon;
+                  const isSelected = formData.paymentMethod === method.id;
+                  const isPending = method.id === "pending";
+                  return (
+                    <button
+                      key={method.id}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, paymentMethod: method.id })}
+                      className={cn(
+                        "flex items-center gap-2 p-3 rounded-lg border-2 transition-all duration-200",
+                        isSelected
+                          ? isPending
+                            ? "border-destructive bg-destructive/10 text-destructive"
+                            : "border-primary bg-primary/10 text-primary"
+                          : "border-border hover:border-muted-foreground/50"
+                      )}
+                    >
+                      <Icon className="w-4 h-4" />
+                      <span className="text-sm font-medium">{method.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {formData.paymentMethod === "pending" && (
+                <p className="text-xs text-destructive flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  Este pago quedará pendiente y se sumará al saldo del cliente
+                </p>
+              )}
             </div>
 
             <DialogFooter>
