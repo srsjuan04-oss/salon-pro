@@ -11,7 +11,10 @@ import {
   Mail, 
   Calendar,
   MoreVertical,
-  Star
+  Star,
+  AlertCircle,
+  Clock,
+  DollarSign
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -34,7 +37,26 @@ interface Client {
   totalSpent: number;
   vip: boolean;
   tags: string[];
+  balance: number; // Saldo pendiente (deuda)
+  balanceDueDate?: string; // Fecha de vencimiento del crédito
 }
+
+// Función para calcular días de mora
+const calculateOverdueDays = (dueDate?: string): number => {
+  if (!dueDate) return 0;
+  const due = new Date(dueDate);
+  const today = new Date();
+  const diffTime = today.getTime() - due.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays > 0 ? diffDays : 0;
+};
+
+const getOverdueStatus = (days: number): { label: string; color: string } => {
+  if (days === 0) return { label: "Al corriente", color: "bg-green-500/10 text-green-600 border-green-500/20" };
+  if (days <= 15) return { label: `${days} días`, color: "bg-yellow-500/10 text-yellow-600 border-yellow-500/20" };
+  if (days <= 30) return { label: `${days} días`, color: "bg-orange-500/10 text-orange-600 border-orange-500/20" };
+  return { label: `${days} días`, color: "bg-destructive/10 text-destructive border-destructive/20" };
+};
 
 const clients: Client[] = [
   {
@@ -47,7 +69,8 @@ const clients: Client[] = [
     lastVisit: "Hace 3 días",
     totalSpent: 4850,
     vip: true,
-    tags: ["Coloración", "Tratamientos"]
+    tags: ["Coloración", "Tratamientos"],
+    balance: 0,
   },
   {
     id: "2",
@@ -59,7 +82,9 @@ const clients: Client[] = [
     lastVisit: "Hace 1 semana",
     totalSpent: 2300,
     vip: false,
-    tags: ["Manicure", "Pedicure"]
+    tags: ["Manicure", "Pedicure"],
+    balance: 850,
+    balanceDueDate: "2025-12-20", // 27 días de mora
   },
   {
     id: "3",
@@ -71,7 +96,9 @@ const clients: Client[] = [
     lastVisit: "Hoy",
     totalSpent: 3600,
     vip: true,
-    tags: ["Corte", "Keratina"]
+    tags: ["Corte", "Keratina"],
+    balance: 1200,
+    balanceDueDate: "2026-01-05", // 11 días de mora
   },
   {
     id: "4",
@@ -83,7 +110,9 @@ const clients: Client[] = [
     lastVisit: "Hace 2 semanas",
     totalSpent: 1200,
     vip: false,
-    tags: ["Corte"]
+    tags: ["Corte"],
+    balance: 2500,
+    balanceDueDate: "2025-11-15", // 62 días de mora
   },
   {
     id: "5",
@@ -95,7 +124,8 @@ const clients: Client[] = [
     lastVisit: "Ayer",
     totalSpent: 6200,
     vip: true,
-    tags: ["Coloración", "Extensiones"]
+    tags: ["Coloración", "Extensiones"],
+    balance: 0,
   },
 ];
 
@@ -154,13 +184,17 @@ export default function ClientsPage() {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <Button variant="outline" size="sm">Todos</Button>
               <Button variant="outline" size="sm" className="gap-1">
                 <Star className="w-3 h-3 text-primary" />
                 VIP
               </Button>
               <Button variant="outline" size="sm">Recientes</Button>
+              <Button variant="outline" size="sm" className="gap-1 text-destructive border-destructive/30">
+                <AlertCircle className="w-3 h-3" />
+                Con Deuda
+              </Button>
             </div>
           </div>
         </div>
@@ -223,6 +257,36 @@ export default function ClientsPage() {
                   </Badge>
                 ))}
               </div>
+
+              {/* Sección de Saldo Pendiente y Mora */}
+              {client.balance > 0 && (
+                <div className="mb-4 p-3 rounded-lg bg-destructive/5 border border-destructive/20">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <DollarSign className="w-4 h-4 text-destructive" />
+                      <span className="text-sm font-medium text-destructive">Saldo Pendiente</span>
+                    </div>
+                    <span className="text-lg font-bold text-destructive">
+                      ${client.balance.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-muted-foreground" />
+                      <span className="text-xs text-muted-foreground">Tiempo de mora</span>
+                    </div>
+                    {(() => {
+                      const overdueDays = calculateOverdueDays(client.balanceDueDate);
+                      const status = getOverdueStatus(overdueDays);
+                      return (
+                        <Badge variant="outline" className={cn("text-xs", status.color)}>
+                          {status.label}
+                        </Badge>
+                      );
+                    })()}
+                  </div>
+                </div>
+              )}
 
               <div className="pt-4 border-t border-border flex items-center justify-between">
                 <div>
