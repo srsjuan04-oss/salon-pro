@@ -1,19 +1,28 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { 
   Download, 
-  Filter,
   DollarSign,
-  TrendingUp,
   Clock,
   CreditCard,
   CheckCircle2,
   AlertCircle,
-  Plus
+  Plus,
+  Calendar,
+  CalendarDays,
+  CalendarRange
 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
+import { format, subDays, isWithinInterval, parseISO, startOfDay, endOfDay } from "date-fns";
+import { es } from "date-fns/locale";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Dialog,
   DialogContent,
@@ -73,23 +82,63 @@ interface Sale {
   status: "paid" | "pending";
 }
 
-const initialSales: Sale[] = [
-  { id: "1", client: "María García", service: "Corte + Tinte", amount: 850, stylist: "Ana López", date: "2026-01-12", time: "09:00", method: "Tarjeta", status: "paid" },
-  { id: "2", client: "Laura Martínez", service: "Manicure", amount: 350, stylist: "Carmen Ruiz", date: "2026-01-12", time: "10:30", method: "Efectivo", status: "paid" },
-  { id: "3", client: "Sofia Hernández", service: "Tratamiento Keratina", amount: 1200, stylist: "Ana López", date: "2026-01-12", time: "11:00", method: "-", status: "pending" },
-  { id: "4", client: "Carlos Mendez", service: "Corte + Barba", amount: 450, stylist: "Miguel Santos", date: "2026-01-12", time: "12:00", method: "Efectivo", status: "paid" },
-  { id: "5", client: "Elena Pérez", service: "Pedicure", amount: 400, stylist: "Carmen Ruiz", date: "2026-01-12", time: "14:00", method: "-", status: "pending" },
-  { id: "6", client: "Rosa Mendoza", service: "Coloración", amount: 600, stylist: "Ana López", date: "2026-01-12", time: "15:00", method: "Transferencia", status: "paid" },
-  { id: "7", client: "Juan López", service: "Corte de cabello", amount: 250, stylist: "Miguel Santos", date: "2026-01-12", time: "16:00", method: "-", status: "pending" },
-  { id: "8", client: "Ana Martínez", service: "Tratamiento Keratina", amount: 1200, stylist: "Ana López", date: "2026-01-11", time: "10:00", method: "Tarjeta", status: "paid" },
-];
+// Generamos ventas de los últimos 30 días para demostración
+const generateSalesData = (): Sale[] => {
+  const today = new Date("2026-01-15");
+  const salesData: Sale[] = [];
+  
+  const clients = ["María García", "Laura Martínez", "Sofia Hernández", "Carlos Mendez", "Elena Pérez", "Rosa Mendoza", "Juan López", "Ana Martínez", "Pedro Ruiz", "Carmen Vega"];
+  const stylists = ["Ana López", "Carmen Ruiz", "Miguel Santos", "Diego Fernández"];
+  const methods = ["Tarjeta", "Efectivo", "Transferencia"];
+  
+  let id = 1;
+  for (let daysAgo = 0; daysAgo <= 30; daysAgo++) {
+    const date = subDays(today, daysAgo);
+    const numSales = Math.floor(Math.random() * 5) + 3; // 3-7 ventas por día
+    
+    for (let i = 0; i < numSales; i++) {
+      const service = services[Math.floor(Math.random() * services.length)];
+      const isPaid = Math.random() > 0.25; // 75% pagadas
+      salesData.push({
+        id: String(id++),
+        client: clients[Math.floor(Math.random() * clients.length)],
+        service: service.name,
+        amount: service.price,
+        stylist: stylists[Math.floor(Math.random() * stylists.length)],
+        date: format(date, "yyyy-MM-dd"),
+        time: `${Math.floor(Math.random() * 10) + 8}:${Math.random() > 0.5 ? "00" : "30"}`,
+        method: isPaid ? methods[Math.floor(Math.random() * methods.length)] : "-",
+        status: isPaid ? "paid" : "pending",
+      });
+    }
+  }
+  
+  return salesData.sort((a, b) => b.date.localeCompare(a.date) || b.time.localeCompare(a.time));
+};
+
+const initialSales: Sale[] = generateSalesData();
 
 const paymentMethods = ["Efectivo", "Tarjeta", "Transferencia"];
+
+type DateFilter = "today" | "yesterday" | "15days" | "30days" | "custom";
+
+const dateFilterLabels: Record<DateFilter, string> = {
+  today: "Hoy",
+  yesterday: "Ayer", 
+  "15days": "Últimos 15 días",
+  "30days": "Últimos 30 días",
+  custom: "Personalizado",
+};
 
 export default function SalesPage() {
   const [sales, setSales] = useState(initialSales);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("all");
+  const [dateFilter, setDateFilter] = useState<DateFilter>("30days");
+  const [customDateRange, setCustomDateRange] = useState<{
+    from: Date | undefined;
+    to: Date | undefined;
+  }>({ from: undefined, to: undefined });
   const [formData, setFormData] = useState({
     client: "",
     service: "",
@@ -97,8 +146,44 @@ export default function SalesPage() {
     paymentMethod: "",
   });
 
-  const paidSales = sales.filter(s => s.status === "paid");
-  const pendingSales = sales.filter(s => s.status === "pending");
+  const today = new Date("2026-01-15");
+
+  // Filtrar ventas por fecha
+  const dateFilteredSales = useMemo(() => {
+    return sales.filter(sale => {
+      const saleDate = parseISO(sale.date);
+      
+      switch (dateFilter) {
+        case "today":
+          return sale.date === format(today, "yyyy-MM-dd");
+        case "yesterday":
+          return sale.date === format(subDays(today, 1), "yyyy-MM-dd");
+        case "15days":
+          return isWithinInterval(saleDate, {
+            start: startOfDay(subDays(today, 14)),
+            end: endOfDay(today),
+          });
+        case "30days":
+          return isWithinInterval(saleDate, {
+            start: startOfDay(subDays(today, 29)),
+            end: endOfDay(today),
+          });
+        case "custom":
+          if (customDateRange.from && customDateRange.to) {
+            return isWithinInterval(saleDate, {
+              start: startOfDay(customDateRange.from),
+              end: endOfDay(customDateRange.to),
+            });
+          }
+          return true;
+        default:
+          return true;
+      }
+    });
+  }, [sales, dateFilter, customDateRange]);
+
+  const paidSales = dateFilteredSales.filter(s => s.status === "paid");
+  const pendingSales = dateFilteredSales.filter(s => s.status === "pending");
   
   const totalPaid = paidSales.reduce((acc, s) => acc + s.amount, 0);
   const totalPending = pendingSales.reduce((acc, s) => acc + s.amount, 0);
@@ -127,10 +212,30 @@ export default function SalesPage() {
   };
 
   const filteredSales = activeTab === "all" 
-    ? sales 
+    ? dateFilteredSales 
     : activeTab === "paid" 
       ? paidSales 
       : pendingSales;
+
+  const getDateRangeLabel = () => {
+    switch (dateFilter) {
+      case "today":
+        return format(today, "d 'de' MMMM, yyyy", { locale: es });
+      case "yesterday":
+        return format(subDays(today, 1), "d 'de' MMMM, yyyy", { locale: es });
+      case "15days":
+        return `${format(subDays(today, 14), "d MMM", { locale: es })} - ${format(today, "d MMM, yyyy", { locale: es })}`;
+      case "30days":
+        return `${format(subDays(today, 29), "d MMM", { locale: es })} - ${format(today, "d MMM, yyyy", { locale: es })}`;
+      case "custom":
+        if (customDateRange.from && customDateRange.to) {
+          return `${format(customDateRange.from, "d MMM", { locale: es })} - ${format(customDateRange.to, "d MMM, yyyy", { locale: es })}`;
+        }
+        return "Seleccionar fechas";
+      default:
+        return "";
+    }
+  };
 
   return (
     <DashboardLayout>
@@ -145,10 +250,6 @@ export default function SalesPage() {
           </div>
           <div className="flex gap-3">
             <Button variant="outline" className="gap-2">
-              <Filter className="w-4 h-4" />
-              Filtrar
-            </Button>
-            <Button variant="outline" className="gap-2">
               <Download className="w-4 h-4" />
               Exportar
             </Button>
@@ -156,6 +257,85 @@ export default function SalesPage() {
               <Plus className="w-4 h-4" />
               Nueva Venta
             </Button>
+          </div>
+        </div>
+
+        {/* Date Filters */}
+        <div className="bg-card rounded-2xl border shadow-soft p-4">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant={dateFilter === "today" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setDateFilter("today")}
+                className={dateFilter === "today" ? "gradient-gold shadow-gold" : ""}
+              >
+                <Calendar className="w-4 h-4 mr-2" />
+                Hoy
+              </Button>
+              <Button
+                variant={dateFilter === "yesterday" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setDateFilter("yesterday")}
+                className={dateFilter === "yesterday" ? "gradient-gold shadow-gold" : ""}
+              >
+                <Calendar className="w-4 h-4 mr-2" />
+                Ayer
+              </Button>
+              <Button
+                variant={dateFilter === "15days" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setDateFilter("15days")}
+                className={dateFilter === "15days" ? "gradient-gold shadow-gold" : ""}
+              >
+                <CalendarDays className="w-4 h-4 mr-2" />
+                15 días
+              </Button>
+              <Button
+                variant={dateFilter === "30days" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setDateFilter("30days")}
+                className={dateFilter === "30days" ? "gradient-gold shadow-gold" : ""}
+              >
+                <CalendarDays className="w-4 h-4 mr-2" />
+                30 días
+              </Button>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={dateFilter === "custom" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setDateFilter("custom")}
+                    className={dateFilter === "custom" ? "gradient-gold shadow-gold" : ""}
+                  >
+                    <CalendarRange className="w-4 h-4 mr-2" />
+                    Personalizado
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <CalendarComponent
+                    mode="range"
+                    selected={{ from: customDateRange.from, to: customDateRange.to }}
+                    onSelect={(range) => {
+                      setCustomDateRange({ from: range?.from, to: range?.to });
+                      setDateFilter("custom");
+                    }}
+                    numberOfMonths={2}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+            
+            <div className="flex items-center gap-2 text-sm">
+              <Badge variant="secondary" className="gap-1 py-1.5 px-3">
+                <CalendarDays className="w-3.5 h-3.5" />
+                {getDateRangeLabel()}
+              </Badge>
+              <Badge variant="outline" className="py-1.5 px-3">
+                {dateFilteredSales.length} ventas
+              </Badge>
+            </div>
           </div>
         </div>
 
