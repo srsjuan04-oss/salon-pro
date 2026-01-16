@@ -5,15 +5,17 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Calendar } from "@/components/ui/calendar";
 import { 
   UserPlus, 
   DollarSign, 
   TrendingUp,
-  Calendar,
+  Calendar as CalendarIcon,
   Star,
   MoreVertical,
   Percent,
-  Search
+  Search,
+  Filter
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -28,7 +30,26 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+
+type TimeFilter = "today" | "yesterday" | "15days" | "30days" | "custom";
+
+const timeFilterOptions: { value: TimeFilter; label: string }[] = [
+  { value: "today", label: "Hoy" },
+  { value: "yesterday", label: "Ayer" },
+  { value: "15days", label: "Últimos 15 días" },
+  { value: "30days", label: "Últimos 30 días" },
+  { value: "custom", label: "Personalizado" },
+];
 
 interface StaffMember {
   id: string;
@@ -149,6 +170,12 @@ const statusStyles = {
 export default function StaffPage() {
   const [staff, setStaff] = useState<StaffMember[]>(initialStaff);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>("30days");
+  const [customDateRange, setCustomDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
+    from: undefined,
+    to: undefined,
+  });
+  const [isCustomDateOpen, setIsCustomDateOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -159,8 +186,29 @@ export default function StaffPage() {
     specialties: [] as string[],
   });
 
-  const totalSales = staff.reduce((acc, s) => acc + s.sales, 0);
-  const totalCommissions = staff.reduce((acc, s) => acc + s.commission, 0);
+  const getFilterLabel = () => {
+    const filter = timeFilterOptions.find(f => f.value === timeFilter);
+    if (timeFilter === "custom" && customDateRange.from && customDateRange.to) {
+      return `${format(customDateRange.from, "dd/MM", { locale: es })} - ${format(customDateRange.to, "dd/MM", { locale: es })}`;
+    }
+    return filter?.label || "Últimos 30 días";
+  };
+
+  // Simulated data multipliers based on filter (in real app, this would fetch from DB)
+  const getMultiplier = () => {
+    switch (timeFilter) {
+      case "today": return 0.05;
+      case "yesterday": return 0.04;
+      case "15days": return 0.5;
+      case "30days": return 1;
+      case "custom": return 0.6;
+      default: return 1;
+    }
+  };
+
+  const multiplier = getMultiplier();
+  const totalSales = Math.round(staff.reduce((acc, s) => acc + s.sales, 0) * multiplier);
+  const totalCommissions = Math.round(staff.reduce((acc, s) => acc + s.commission, 0) * multiplier * 100) / 100;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -206,6 +254,72 @@ export default function StaffPage() {
           </Button>
         </div>
 
+        {/* Time Filter */}
+        <div className="bg-card rounded-2xl border shadow-soft p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Filter className="w-4 h-4 text-muted-foreground" />
+              <span className="text-sm font-medium">Filtrar ingresos:</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {timeFilterOptions.map((option) => (
+                option.value !== "custom" ? (
+                  <Button
+                    key={option.value}
+                    variant={timeFilter === option.value ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setTimeFilter(option.value)}
+                    className={cn(
+                      timeFilter === option.value && "gradient-gold shadow-gold"
+                    )}
+                  >
+                    {option.label}
+                  </Button>
+                ) : (
+                  <Popover key={option.value} open={isCustomDateOpen} onOpenChange={setIsCustomDateOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant={timeFilter === "custom" ? "default" : "outline"}
+                        size="sm"
+                        className={cn(
+                          "gap-2",
+                          timeFilter === "custom" && "gradient-gold shadow-gold"
+                        )}
+                      >
+                        <CalendarIcon className="w-4 h-4" />
+                        {timeFilter === "custom" && customDateRange.from && customDateRange.to
+                          ? `${format(customDateRange.from, "dd/MM")} - ${format(customDateRange.to, "dd/MM")}`
+                          : "Personalizado"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0 bg-popover" align="start">
+                      <div className="p-3 border-b">
+                        <p className="text-sm font-medium">Seleccionar rango de fechas</p>
+                      </div>
+                      <Calendar
+                        mode="range"
+                        selected={{ from: customDateRange.from, to: customDateRange.to }}
+                        onSelect={(range) => {
+                          setCustomDateRange({ from: range?.from, to: range?.to });
+                          if (range?.from && range?.to) {
+                            setTimeFilter("custom");
+                            setIsCustomDateOpen(false);
+                          }
+                        }}
+                        numberOfMonths={1}
+                        className="p-3 pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                )
+              ))}
+            </div>
+            <div className="ml-auto text-sm text-muted-foreground">
+              Mostrando: <span className="font-medium text-foreground">{getFilterLabel()}</span>
+            </div>
+          </div>
+        </div>
+
         {/* Summary Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="bg-card rounded-2xl border shadow-soft p-5">
@@ -235,7 +349,7 @@ export default function StaffPage() {
           <div className="bg-card rounded-2xl border shadow-soft p-5">
             <div className="flex items-center gap-3 mb-2">
               <div className="w-10 h-10 rounded-xl bg-info/10 flex items-center justify-center">
-                <Calendar className="w-5 h-5 text-info" />
+                <CalendarIcon className="w-5 h-5 text-info" />
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Citas Hoy</p>
