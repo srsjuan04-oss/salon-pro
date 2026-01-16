@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Plus, Clock, DollarSign, CreditCard, Banknote, Smartphone, AlertCircle } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Clock, DollarSign, CreditCard, Banknote, Smartphone, AlertCircle, Search, UserPlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Dialog,
@@ -19,6 +19,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { initialClients, type Client } from "@/data/clients";
+import { Switch } from "@/components/ui/switch";
 
 const hours = Array.from({ length: 12 }, (_, i) => i + 8);
 
@@ -61,8 +69,19 @@ export default function CalendarPage() {
   const [services, setServices] = useState(initialServices);
   const [isAddingService, setIsAddingService] = useState(false);
   const [newServiceName, setNewServiceName] = useState("");
+  const [clients, setClients] = useState<Client[]>(initialClients);
+  const [clientSearch, setClientSearch] = useState("");
+  const [isClientPopoverOpen, setIsClientPopoverOpen] = useState(false);
+  const [isAddingClient, setIsAddingClient] = useState(false);
+  const [newClientData, setNewClientData] = useState({
+    name: "",
+    identificationNumber: "",
+    phone: "",
+    email: "",
+  });
   const [formData, setFormData] = useState({
     client: "",
+    clientId: "",
     service: "",
     staffId: "",
     date: "",
@@ -71,6 +90,45 @@ export default function CalendarPage() {
     price: "",
     paymentMethod: "",
   });
+
+  const filteredClients = useMemo(() => {
+    if (!clientSearch) return clients;
+    const search = clientSearch.toLowerCase();
+    return clients.filter(c => 
+      c.name.toLowerCase().includes(search) || 
+      c.identificationNumber.includes(search)
+    );
+  }, [clients, clientSearch]);
+
+  const handleSelectClient = (client: Client) => {
+    setFormData({ ...formData, client: client.name, clientId: client.id });
+    setClientSearch("");
+    setIsClientPopoverOpen(false);
+  };
+
+  const handleAddNewClient = () => {
+    if (newClientData.name && newClientData.identificationNumber) {
+      const newClient: Client = {
+        id: String(clients.length + 1),
+        name: newClientData.name,
+        email: newClientData.email,
+        phone: newClientData.phone,
+        avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(newClientData.name)}&background=random`,
+        visits: 0,
+        lastVisit: "Nuevo",
+        totalSpent: 0,
+        vip: false,
+        tags: [],
+        balance: 0,
+        identificationNumber: newClientData.identificationNumber,
+      };
+      setClients([...clients, newClient]);
+      setFormData({ ...formData, client: newClient.name, clientId: newClient.id });
+      setNewClientData({ name: "", identificationNumber: "", phone: "", email: "" });
+      setIsAddingClient(false);
+      setIsClientPopoverOpen(false);
+    }
+  };
 
   const handleAddService = () => {
     if (newServiceName.trim()) {
@@ -101,7 +159,7 @@ export default function CalendarPage() {
       isPending: formData.paymentMethod === "pending"
     });
     setIsDialogOpen(false);
-    setFormData({ client: "", service: "", staffId: "", date: "", time: "", duration: "1", price: "", paymentMethod: "" });
+    setFormData({ client: "", clientId: "", service: "", staffId: "", date: "", time: "", duration: "1", price: "", paymentMethod: "" });
   };
 
   const getAppointmentStyle = (time: string, duration: number) => {
@@ -278,14 +336,137 @@ export default function CalendarPage() {
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="client">Cliente</Label>
-              <Input
-                id="client"
-                placeholder="Nombre del cliente"
-                value={formData.client}
-                onChange={(e) => setFormData({ ...formData, client: e.target.value })}
-                required
-              />
+              <div className="flex items-center justify-between">
+                <Label>Cliente</Label>
+                {!isAddingClient && (
+                  <Button 
+                    type="button" 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-6 text-xs gap-1 text-primary"
+                    onClick={() => {
+                      setIsAddingClient(true);
+                      setIsClientPopoverOpen(false);
+                    }}
+                  >
+                    <UserPlus className="w-3 h-3" />
+                    Nuevo
+                  </Button>
+                )}
+              </div>
+
+              {isAddingClient ? (
+                <div className="space-y-3 p-3 border rounded-lg bg-secondary/30">
+                  <p className="text-sm font-medium">Nuevo Cliente</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      placeholder="Número de identificación"
+                      value={newClientData.identificationNumber}
+                      onChange={(e) => setNewClientData({ ...newClientData, identificationNumber: e.target.value })}
+                    />
+                    <Input
+                      placeholder="Nombre completo"
+                      value={newClientData.name}
+                      onChange={(e) => setNewClientData({ ...newClientData, name: e.target.value })}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      placeholder="Teléfono"
+                      value={newClientData.phone}
+                      onChange={(e) => setNewClientData({ ...newClientData, phone: e.target.value })}
+                    />
+                    <Input
+                      placeholder="Email (opcional)"
+                      value={newClientData.email}
+                      onChange={(e) => setNewClientData({ ...newClientData, email: e.target.value })}
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button 
+                      type="button" 
+                      size="sm" 
+                      className="gradient-gold shadow-gold"
+                      onClick={handleAddNewClient}
+                      disabled={!newClientData.name || !newClientData.identificationNumber}
+                    >
+                      Agregar Cliente
+                    </Button>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        setIsAddingClient(false);
+                        setNewClientData({ name: "", identificationNumber: "", phone: "", email: "" });
+                      }}
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <Popover open={isClientPopoverOpen} onOpenChange={setIsClientPopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      className="w-full justify-between font-normal"
+                    >
+                      {formData.client || "Seleccionar cliente..."}
+                      <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[400px] p-0 bg-popover" align="start">
+                    <div className="p-2 border-b">
+                      <Input
+                        placeholder="Buscar por nombre o ID..."
+                        value={clientSearch}
+                        onChange={(e) => setClientSearch(e.target.value)}
+                        className="h-9"
+                      />
+                    </div>
+                    <ScrollArea className="h-[200px]">
+                      {filteredClients.length === 0 ? (
+                        <div className="p-4 text-center text-sm text-muted-foreground">
+                          No se encontraron clientes
+                        </div>
+                      ) : (
+                        <div className="p-1">
+                          {filteredClients.map((client) => (
+                            <button
+                              key={client.id}
+                              type="button"
+                              className={cn(
+                                "w-full flex items-center gap-3 p-2 rounded-md hover:bg-secondary transition-colors text-left",
+                                formData.clientId === client.id && "bg-primary/10"
+                              )}
+                              onClick={() => handleSelectClient(client)}
+                            >
+                              <img
+                                src={client.avatar}
+                                alt={client.name}
+                                className="w-8 h-8 rounded-full object-cover"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate">{client.name}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  ID: {client.identificationNumber} • {client.phone}
+                                </p>
+                              </div>
+                              {client.balance > 0 && (
+                                <span className="text-xs text-destructive font-medium">
+                                  Deuda: ${client.balance}
+                                </span>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </ScrollArea>
+                  </PopoverContent>
+                </Popover>
+              )}
             </div>
 
             <div className="space-y-2">
