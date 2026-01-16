@@ -44,7 +44,7 @@ const appointments = [
 const daysOfWeek = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 const dates = [12, 13, 14, 15, 16, 17, 18];
 
-const services = [
+const initialServices = [
   "Corte de cabello",
   "Corte + Tinte",
   "Corte + Barba",
@@ -58,6 +58,9 @@ const services = [
 export default function CalendarPage() {
   const [selectedDay, setSelectedDay] = useState(0);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [services, setServices] = useState(initialServices);
+  const [isAddingService, setIsAddingService] = useState(false);
+  const [newServiceName, setNewServiceName] = useState("");
   const [formData, setFormData] = useState({
     client: "",
     service: "",
@@ -68,6 +71,15 @@ export default function CalendarPage() {
     price: "",
     paymentMethod: "",
   });
+
+  const handleAddService = () => {
+    if (newServiceName.trim()) {
+      setServices([...services, newServiceName.trim()]);
+      setFormData({ ...formData, service: newServiceName.trim() });
+      setNewServiceName("");
+      setIsAddingService(false);
+    }
+  };
 
   const paymentMethods = [
     { id: "cash", label: "Efectivo", icon: Banknote },
@@ -277,23 +289,74 @@ export default function CalendarPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="service">Servicio</Label>
-              <Select
-                value={formData.service}
-                onValueChange={(value) => setFormData({ ...formData, service: value })}
-                required
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar servicio" />
-                </SelectTrigger>
-                <SelectContent>
-                  {services.map((service) => (
-                    <SelectItem key={service} value={service}>
-                      {service}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="service">Servicio</Label>
+                {!isAddingService && (
+                  <Button 
+                    type="button" 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-6 text-xs gap-1 text-primary"
+                    onClick={() => setIsAddingService(true)}
+                  >
+                    <Plus className="w-3 h-3" />
+                    Nuevo
+                  </Button>
+                )}
+              </div>
+              
+              {isAddingService ? (
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Nombre del nuevo servicio"
+                    value={newServiceName}
+                    onChange={(e) => setNewServiceName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddService();
+                      }
+                    }}
+                    autoFocus
+                  />
+                  <Button 
+                    type="button" 
+                    size="sm" 
+                    className="gradient-gold shadow-gold"
+                    onClick={handleAddService}
+                  >
+                    Agregar
+                  </Button>
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      setIsAddingService(false);
+                      setNewServiceName("");
+                    }}
+                  >
+                    Cancelar
+                  </Button>
+                </div>
+              ) : (
+                <Select
+                  value={formData.service}
+                  onValueChange={(value) => setFormData({ ...formData, service: value })}
+                  required
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar servicio" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {services.map((service) => (
+                      <SelectItem key={service} value={service}>
+                        {service}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
 
             <div className="space-y-2">
