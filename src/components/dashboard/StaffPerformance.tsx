@@ -1,4 +1,12 @@
+import { useState } from "react";
 import { Progress } from "@/components/ui/progress";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface StaffMember {
   id: string;
@@ -40,17 +48,46 @@ const staffData: StaffMember[] = [
   },
 ];
 
+const timeFilters = [
+  { value: "today", label: "Hoy" },
+  { value: "week", label: "Esta semana" },
+  { value: "month", label: "Este mes" },
+  { value: "quarter", label: "Este trimestre" },
+  { value: "year", label: "Este año" },
+];
+
 export function StaffPerformance() {
+  const [timeFilter, setTimeFilter] = useState("month");
+
+  const getFilterLabel = () => {
+    const filter = timeFilters.find(f => f.value === timeFilter);
+    return filter?.label.toLowerCase() || "este mes";
+  };
+
   return (
     <div className="bg-card rounded-2xl border shadow-soft p-6 animate-slide-up">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h3 className="text-lg font-semibold">Rendimiento del Staff</h3>
-          <p className="text-sm text-muted-foreground">Ventas y comisiones de este mes</p>
+          <p className="text-sm text-muted-foreground">Ventas y comisiones de {getFilterLabel()}</p>
         </div>
-        <button className="text-sm text-primary font-medium hover:underline">
-          Ver detalles
-        </button>
+        <div className="flex items-center gap-2">
+          <Select value={timeFilter} onValueChange={setTimeFilter}>
+            <SelectTrigger className="w-[140px] h-8 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {timeFilters.map((filter) => (
+                <SelectItem key={filter.value} value={filter.value}>
+                  {filter.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <button className="text-sm text-primary font-medium hover:underline">
+            Ver detalles
+          </button>
+        </div>
       </div>
       
       <div className="space-y-5">
