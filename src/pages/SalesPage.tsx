@@ -12,7 +12,9 @@ import {
   Plus,
   Calendar,
   CalendarDays,
-  CalendarRange
+  CalendarRange,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
 import { format, subDays, isWithinInterval, parseISO, startOfDay, endOfDay } from "date-fns";
@@ -41,6 +43,8 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+
+const ITEMS_PER_PAGE = 10;
 
 const monthlyData = [
   { name: "Ene", pagadas: 24000, pendientes: 4000 },
@@ -601,6 +605,13 @@ interface SalesTableProps {
 function SalesTable({ sales, onMarkAsPaid }: SalesTableProps) {
   const [paymentDialog, setPaymentDialog] = useState<string | null>(null);
   const [selectedMethod, setSelectedMethod] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const totalPages = Math.ceil(sales.length / ITEMS_PER_PAGE);
+  const paginatedSales = sales.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
 
   const handleConfirmPayment = () => {
     if (paymentDialog && selectedMethod) {
@@ -610,12 +621,18 @@ function SalesTable({ sales, onMarkAsPaid }: SalesTableProps) {
     }
   };
 
+  // Reset page when sales change
+  useMemo(() => {
+    setCurrentPage(1);
+  }, [sales.length]);
+
   return (
     <>
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
             <tr className="border-b border-border">
+              <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">#</th>
               <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Cliente</th>
               <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Servicio</th>
               <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground hidden md:table-cell">Staff</th>
@@ -626,8 +643,11 @@ function SalesTable({ sales, onMarkAsPaid }: SalesTableProps) {
             </tr>
           </thead>
           <tbody>
-            {sales.map((sale) => (
+            {paginatedSales.map((sale, index) => (
               <tr key={sale.id} className="border-b border-border last:border-0 hover:bg-secondary/30 transition-colors">
+                <td className="py-4 px-4 text-sm text-muted-foreground">
+                  {(currentPage - 1) * ITEMS_PER_PAGE + index + 1}
+                </td>
                 <td className="py-4 px-4">
                   <p className="font-medium">{sale.client}</p>
                 </td>
@@ -678,6 +698,58 @@ function SalesTable({ sales, onMarkAsPaid }: SalesTableProps) {
           </tbody>
         </table>
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
+          <p className="text-sm text-muted-foreground">
+            Mostrando {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, sales.length)} de {sales.length}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <div className="flex items-center gap-1">
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNum: number;
+                if (totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+                return (
+                  <Button
+                    key={pageNum}
+                    variant={currentPage === pageNum ? "default" : "outline"}
+                    size="sm"
+                    className={cn("w-8 h-8 p-0", currentPage === pageNum && "gradient-gold shadow-gold")}
+                    onClick={() => setCurrentPage(pageNum)}
+                  >
+                    {pageNum}
+                  </Button>
+                );
+              })}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+            >
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Payment Dialog */}
       <Dialog open={!!paymentDialog} onOpenChange={(open) => !open && setPaymentDialog(null)}>

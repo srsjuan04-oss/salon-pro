@@ -44,12 +44,16 @@ import {
   Repeat,
   Calendar,
   CalendarDays,
-  CalendarRange
+  CalendarRange,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { format, subDays, isWithinInterval, parseISO, startOfDay, endOfDay } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+
+const ITEMS_PER_PAGE = 10;
 
 interface Expense {
   id: string;
@@ -164,6 +168,7 @@ export default function ExpensesPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [dateFilter, setDateFilter] = useState<DateFilter>("30days");
   const [typeFilter, setTypeFilter] = useState<ExpenseTypeFilter>("all");
+  const [currentPage, setCurrentPage] = useState(1);
   const [customDateRange, setCustomDateRange] = useState<{
     from: Date | undefined;
     to: Date | undefined;
@@ -218,12 +223,24 @@ export default function ExpensesPage() {
     return dateFilteredExpenses.filter(e => e.type === typeFilter);
   }, [dateFilteredExpenses, typeFilter]);
 
+  // Reset page when filters change
+  useMemo(() => {
+    setCurrentPage(1);
+  }, [dateFilter, typeFilter, customDateRange]);
+
   const fixedExpenses = dateFilteredExpenses.filter(e => e.type === "fixed");
   const variableExpenses = dateFilteredExpenses.filter(e => e.type === "variable");
 
   const totalFixed = fixedExpenses.reduce((acc, e) => acc + e.amount, 0);
   const totalVariable = variableExpenses.reduce((acc, e) => acc + e.amount, 0);
   const totalExpenses = totalFixed + totalVariable;
+
+  // Pagination
+  const totalPages = Math.ceil(filteredExpenses.length / ITEMS_PER_PAGE);
+  const paginatedExpenses = filteredExpenses.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
 
   // Datos para el gráfico de categorías
   const expensesByCategory = useMemo(() => {
@@ -618,9 +635,16 @@ export default function ExpensesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredExpenses.slice(0, 15).map((expense) => (
+                {paginatedExpenses.map((expense, index) => (
                   <TableRow key={expense.id}>
-                    <TableCell className="font-medium">{expense.description}</TableCell>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground w-6">
+                          {(currentPage - 1) * ITEMS_PER_PAGE + index + 1}.
+                        </span>
+                        {expense.description}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <Badge 
                         variant="outline" 
@@ -658,11 +682,56 @@ export default function ExpensesPage() {
                 ))}
               </TableBody>
             </Table>
-            {filteredExpenses.length > 15 && (
-              <div className="mt-4 text-center">
-                <Button variant="outline" size="sm">
-                  Ver todos ({filteredExpenses.length - 15} más)
-                </Button>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
+                <p className="text-sm text-muted-foreground">
+                  Mostrando {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredExpenses.length)} de {filteredExpenses.length}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum: number;
+                      if (totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (currentPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNum = totalPages - 4 + i;
+                      } else {
+                        pageNum = currentPage - 2 + i;
+                      }
+                      return (
+                        <Button
+                          key={pageNum}
+                          variant={currentPage === pageNum ? "default" : "outline"}
+                          size="sm"
+                          className={cn("w-8 h-8 p-0", currentPage === pageNum && "gradient-gold shadow-gold")}
+                          onClick={() => setCurrentPage(pageNum)}
+                        >
+                          {pageNum}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
             )}
           </CardContent>
