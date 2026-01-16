@@ -1,16 +1,34 @@
+import { useState } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { 
   UserPlus, 
   DollarSign, 
   TrendingUp,
   Calendar,
   Star,
-  MoreVertical
+  MoreVertical,
+  Percent,
+  Search
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface StaffMember {
   id: string;
@@ -29,7 +47,7 @@ interface StaffMember {
   specialties: string[];
 }
 
-const staff: StaffMember[] = [
+const initialStaff: StaffMember[] = [
   {
     id: "1",
     name: "Ana López",
@@ -96,6 +114,32 @@ const staff: StaffMember[] = [
   },
 ];
 
+const availableServices = [
+  "Corte de cabello",
+  "Corte + Tinte",
+  "Corte + Barba",
+  "Corte masculino",
+  "Manicure",
+  "Pedicure",
+  "Tratamiento capilar",
+  "Coloración",
+  "Fade",
+  "Barba",
+  "Peinados",
+  "Extensiones",
+  "Nail Art",
+  "Keratina",
+];
+
+const roles = [
+  "Estilista",
+  "Estilista Senior",
+  "Barbero",
+  "Manicurista",
+  "Recepcionista",
+  "Gerente",
+];
+
 const statusStyles = {
   available: { color: "bg-success", label: "Disponible" },
   busy: { color: "bg-primary", label: "Ocupado" },
@@ -103,8 +147,44 @@ const statusStyles = {
 };
 
 export default function StaffPage() {
+  const [staff, setStaff] = useState<StaffMember[]>(initialStaff);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    role: "",
+    commissionRate: "15",
+    target: "3000",
+    specialties: [] as string[],
+  });
+
   const totalSales = staff.reduce((acc, s) => acc + s.sales, 0);
   const totalCommissions = staff.reduce((acc, s) => acc + s.commission, 0);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const newMember: StaffMember = {
+      id: String(staff.length + 1),
+      name: formData.name,
+      email: formData.email,
+      phone: formData.phone,
+      role: formData.role,
+      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.name)}&background=random`,
+      sales: 0,
+      target: parseFloat(formData.target) || 3000,
+      commission: 0,
+      commissionRate: parseFloat(formData.commissionRate) || 15,
+      appointmentsToday: 0,
+      rating: 5.0,
+      status: "available",
+      specialties: formData.specialties,
+    };
+    setStaff([...staff, newMember]);
+    console.log("Nuevo miembro:", newMember);
+    setIsDialogOpen(false);
+    setFormData({ name: "", email: "", phone: "", role: "", commissionRate: "15", target: "3000", specialties: [] });
+  };
 
   return (
     <DashboardLayout>
@@ -117,7 +197,10 @@ export default function StaffPage() {
               Gestiona tu equipo y sus comisiones
             </p>
           </div>
-          <Button className="gradient-gold shadow-gold gap-2">
+          <Button 
+            className="gradient-gold shadow-gold gap-2"
+            onClick={() => setIsDialogOpen(true)}
+          >
             <UserPlus className="w-4 h-4" />
             Agregar Miembro
           </Button>
@@ -250,6 +333,209 @@ export default function StaffPage() {
           })}
         </div>
       </div>
+
+      {/* Dialog Agregar Miembro */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Agregar Miembro del Staff</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Nombre completo</Label>
+                <Input
+                  id="name"
+                  placeholder="Nombre del miembro"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Rol</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      className="w-full justify-between font-normal"
+                    >
+                      {formData.role || "Seleccionar rol..."}
+                      <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[200px] p-0 bg-popover" align="start">
+                    <ScrollArea className="h-[200px]">
+                      <div className="p-2 space-y-1">
+                        {roles.map((role) => (
+                          <button
+                            key={role}
+                            type="button"
+                            className={cn(
+                              "w-full flex items-center gap-3 p-2 rounded-md hover:bg-secondary transition-colors text-left",
+                              formData.role === role && "bg-primary/10"
+                            )}
+                            onClick={() => setFormData({ ...formData, role })}
+                          >
+                            <span className="text-sm">{role}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="email">Correo electrónico</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="correo@salon.com"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="phone">Teléfono</Label>
+                <Input
+                  id="phone"
+                  type="tel"
+                  placeholder="+52 55 1234 5678"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="commissionRate" className="flex items-center gap-2">
+                  <Percent className="w-4 h-4" />
+                  Porcentaje de comisión
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="commissionRate"
+                    type="number"
+                    min="0"
+                    max="100"
+                    placeholder="15"
+                    value={formData.commissionRate}
+                    onChange={(e) => setFormData({ ...formData, commissionRate: e.target.value })}
+                    className="pr-8"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">%</span>
+                </div>
+                <p className="text-xs text-muted-foreground">Porcentaje sobre cada venta</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="target" className="flex items-center gap-2">
+                  <DollarSign className="w-4 h-4" />
+                  Meta mensual
+                </Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                  <Input
+                    id="target"
+                    type="number"
+                    min="0"
+                    placeholder="3000"
+                    value={formData.target}
+                    onChange={(e) => setFormData({ ...formData, target: e.target.value })}
+                    className="pl-7"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Servicios / Especialidades</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between font-normal"
+                  >
+                    {formData.specialties.length > 0
+                      ? `${formData.specialties.length} servicio(s) seleccionado(s)`
+                      : "Seleccionar servicios..."}
+                    <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[400px] p-0 bg-popover" align="start">
+                  <ScrollArea className="h-[200px]">
+                    <div className="p-2 space-y-1">
+                      {availableServices.map((service) => {
+                        const isSelected = formData.specialties.includes(service);
+                        return (
+                          <button
+                            key={service}
+                            type="button"
+                            className={cn(
+                              "w-full flex items-center gap-3 p-2 rounded-md hover:bg-secondary transition-colors text-left",
+                              isSelected && "bg-primary/10"
+                            )}
+                            onClick={() => {
+                              if (isSelected) {
+                                setFormData({
+                                  ...formData,
+                                  specialties: formData.specialties.filter(s => s !== service)
+                                });
+                              } else {
+                                setFormData({
+                                  ...formData,
+                                  specialties: [...formData.specialties, service]
+                                });
+                              }
+                            }}
+                          >
+                            <div className={cn(
+                              "w-4 h-4 rounded border flex items-center justify-center",
+                              isSelected ? "bg-primary border-primary" : "border-muted-foreground"
+                            )}>
+                              {isSelected && <span className="text-primary-foreground text-xs">✓</span>}
+                            </div>
+                            <span className="text-sm">{service}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </ScrollArea>
+                </PopoverContent>
+              </Popover>
+              {formData.specialties.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {formData.specialties.map((service) => (
+                    <span key={service} className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full">
+                      {service}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button 
+                type="submit" 
+                className="gradient-gold shadow-gold"
+                disabled={!formData.name || !formData.role}
+              >
+                Agregar Miembro
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
