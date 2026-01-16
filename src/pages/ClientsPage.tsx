@@ -21,7 +21,10 @@ import {
   CalendarClock,
   Eye,
   Edit,
-  MessageSquare
+  MessageSquare,
+  CreditCard,
+  Banknote,
+  Check
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -117,12 +120,24 @@ const sampleAppointmentChanges: AppointmentChange[] = [
   },
 ];
 
+const paymentMethods = [
+  { id: "efectivo", label: "Efectivo", icon: Banknote },
+  { id: "tarjeta", label: "Tarjeta", icon: CreditCard },
+  { id: "transferencia", label: "Transferencia", icon: DollarSign },
+];
+
 export default function ClientsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [clients, setClients] = useState<Client[]>(initialClients);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [paymentData, setPaymentData] = useState({
+    amount: "",
+    method: "efectivo",
+    note: "",
+  });
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -132,6 +147,40 @@ export default function ClientsPage() {
     identificationNumber: "",
   });
   const [services] = useState(initialServices);
+
+  const handleOpenPayment = (client: Client) => {
+    setSelectedClient(client);
+    setPaymentData({ amount: String(client.balance), method: "efectivo", note: "" });
+    setPaymentDialogOpen(true);
+  };
+
+  const handlePaymentSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedClient) return;
+    
+    const paymentAmount = parseFloat(paymentData.amount) || 0;
+    const newBalance = Math.max(0, selectedClient.balance - paymentAmount);
+    
+    setClients(clients.map(c => 
+      c.id === selectedClient.id 
+        ? { ...c, balance: newBalance, balanceDueDate: newBalance === 0 ? undefined : c.balanceDueDate }
+        : c
+    ));
+    
+    console.log("Pago registrado:", {
+      clientId: selectedClient.id,
+      clientName: selectedClient.name,
+      amount: paymentAmount,
+      method: paymentData.method,
+      note: paymentData.note,
+      previousBalance: selectedClient.balance,
+      newBalance,
+    });
+    
+    setPaymentDialogOpen(false);
+    setPaymentData({ amount: "", method: "efectivo", note: "" });
+    setSelectedClient(null);
+  };
 
   const getClientHistory = (clientId: string): AppointmentChange[] => {
     return sampleAppointmentChanges.filter(change => change.clientId === clientId);
@@ -421,7 +470,7 @@ export default function ClientsPage() {
                       ${client.balance.toLocaleString()}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <Clock className="w-4 h-4 text-muted-foreground" />
                       <span className="text-xs text-muted-foreground">Tiempo de mora</span>
@@ -436,6 +485,17 @@ export default function ClientsPage() {
                       );
                     })()}
                   </div>
+                  <Button 
+                    size="sm" 
+                    className="w-full gap-2 bg-green-600 hover:bg-green-700 text-white"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenPayment(client);
+                    }}
+                  >
+                    <CreditCard className="w-4 h-4" />
+                    Registrar Pago
+                  </Button>
                 </div>
               )}
 
@@ -725,6 +785,142 @@ export default function ClientsPage() {
                 </Button>
               </DialogFooter>
             </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Registrar Pago */}
+      <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CreditCard className="w-5 h-5 text-primary" />
+              Registrar Pago
+            </DialogTitle>
+          </DialogHeader>
+          {selectedClient && (
+            <form onSubmit={handlePaymentSubmit} className="space-y-4">
+              {/* Info del cliente */}
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                <img
+                  src={selectedClient.avatar}
+                  alt={selectedClient.name}
+                  className="w-10 h-10 rounded-full object-cover"
+                />
+                <div>
+                  <p className="font-medium">{selectedClient.name}</p>
+                  <p className="text-sm text-destructive font-semibold">
+                    Saldo: ${selectedClient.balance.toLocaleString()}
+                  </p>
+                </div>
+              </div>
+
+              {/* Monto a pagar */}
+              <div className="space-y-2">
+                <Label htmlFor="paymentAmount">Monto a pagar</Label>
+                <div className="relative">
+                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    id="paymentAmount"
+                    type="number"
+                    min="0"
+                    max={selectedClient.balance}
+                    step="0.01"
+                    placeholder="0.00"
+                    className="pl-9"
+                    value={paymentData.amount}
+                    onChange={(e) => setPaymentData({ ...paymentData, amount: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => setPaymentData({ ...paymentData, amount: String(selectedClient.balance) })}
+                  >
+                    Pago Total
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => setPaymentData({ ...paymentData, amount: String(selectedClient.balance / 2) })}
+                  >
+                    50%
+                  </Button>
+                </div>
+              </div>
+
+              {/* Método de pago */}
+              <div className="space-y-2">
+                <Label>Método de pago</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {paymentMethods.map((method) => {
+                    const Icon = method.icon;
+                    return (
+                      <Button
+                        key={method.id}
+                        type="button"
+                        variant={paymentData.method === method.id ? "default" : "outline"}
+                        className={cn(
+                          "flex flex-col gap-1 h-auto py-3",
+                          paymentData.method === method.id && "ring-2 ring-primary"
+                        )}
+                        onClick={() => setPaymentData({ ...paymentData, method: method.id })}
+                      >
+                        <Icon className="w-5 h-5" />
+                        <span className="text-xs">{method.label}</span>
+                      </Button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Nota */}
+              <div className="space-y-2">
+                <Label htmlFor="paymentNote">Nota (opcional)</Label>
+                <Input
+                  id="paymentNote"
+                  placeholder="Ej: Abono parcial, pago con tarjeta..."
+                  value={paymentData.note}
+                  onChange={(e) => setPaymentData({ ...paymentData, note: e.target.value })}
+                />
+              </div>
+
+              {/* Resumen */}
+              {paymentData.amount && (
+                <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Saldo actual:</span>
+                    <span className="font-medium">${selectedClient.balance.toLocaleString()}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Pago:</span>
+                    <span className="font-medium text-green-600">-${parseFloat(paymentData.amount || "0").toLocaleString()}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm pt-2 mt-2 border-t border-green-500/20">
+                    <span className="font-medium">Nuevo saldo:</span>
+                    <span className="font-bold">
+                      ${Math.max(0, selectedClient.balance - (parseFloat(paymentData.amount) || 0)).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setPaymentDialogOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button type="submit" className="gap-2 bg-green-600 hover:bg-green-700">
+                  <Check className="w-4 h-4" />
+                  Confirmar Pago
+                </Button>
+              </DialogFooter>
+            </form>
           )}
         </DialogContent>
       </Dialog>
