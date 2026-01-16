@@ -1,3 +1,18 @@
+export interface AppointmentChange {
+  id: string;
+  appointmentId: string;
+  clientId: string;
+  clientName: string;
+  service: string;
+  originalDate: string;
+  originalTime: string;
+  action: "cancelled" | "rescheduled";
+  reason: string;
+  newDate?: string;
+  newTime?: string;
+  createdAt: string;
+}
+
 export interface Client {
   id: string;
   name: string;
@@ -11,7 +26,8 @@ export interface Client {
   tags: string[];
   balance: number;
   balanceDueDate?: string;
-  identificationNumber: string; // Número de identificación (cédula, DNI, etc.)
+  identificationNumber: string;
+  appointmentChanges?: AppointmentChange[];
 }
 
 export const initialClients: Client[] = [
