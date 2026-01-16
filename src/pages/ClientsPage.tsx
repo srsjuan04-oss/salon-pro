@@ -10,13 +10,18 @@ import {
   Phone, 
   Mail, 
   Calendar,
-  MoreVertical,
   Star,
   AlertCircle,
   Clock,
   DollarSign,
   TrendingUp,
-  Hash
+  Hash,
+  History,
+  CalendarX,
+  CalendarClock,
+  Eye,
+  Edit,
+  MessageSquare
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -26,16 +31,82 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell } from "recharts";
 import { ChartContainer, ChartTooltip } from "@/components/ui/chart";
-import { initialClients, calculateOverdueDays, getOverdueStatus, type Client } from "@/data/clients";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { initialClients, calculateOverdueDays, getOverdueStatus, type Client, type AppointmentChange } from "@/data/clients";
+
+// Sample appointment changes for demo
+const sampleAppointmentChanges: AppointmentChange[] = [
+  {
+    id: "1",
+    appointmentId: "apt1",
+    clientId: "1",
+    clientName: "María García",
+    service: "Corte + Tinte",
+    originalDate: "2026-01-10",
+    originalTime: "10:00",
+    action: "rescheduled",
+    reason: "Cliente solicitó cambio por compromisos laborales",
+    newDate: "2026-01-12",
+    newTime: "14:00",
+    createdAt: "2026-01-09T10:30:00Z"
+  },
+  {
+    id: "2",
+    appointmentId: "apt2",
+    clientId: "2",
+    clientName: "Laura Martínez",
+    service: "Manicure",
+    originalDate: "2026-01-08",
+    originalTime: "11:00",
+    action: "cancelled",
+    reason: "No pudo asistir por enfermedad",
+    createdAt: "2026-01-08T09:00:00Z"
+  },
+  {
+    id: "3",
+    appointmentId: "apt3",
+    clientId: "3",
+    clientName: "Sofia Hernández",
+    service: "Tratamiento capilar",
+    originalDate: "2026-01-05",
+    originalTime: "15:00",
+    action: "cancelled",
+    reason: "Viaje de emergencia",
+    createdAt: "2026-01-04T16:00:00Z"
+  },
+  {
+    id: "4",
+    appointmentId: "apt4",
+    clientId: "1",
+    clientName: "María García",
+    service: "Coloración",
+    originalDate: "2025-12-20",
+    originalTime: "09:00",
+    action: "rescheduled",
+    reason: "Cambio de horario solicitado por la cliente",
+    newDate: "2025-12-22",
+    newTime: "11:00",
+    createdAt: "2025-12-19T14:00:00Z"
+  },
+];
 
 export default function ClientsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [clients, setClients] = useState<Client[]>(initialClients);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -44,6 +115,15 @@ export default function ClientsPage() {
     tags: "",
     identificationNumber: "",
   });
+
+  const getClientHistory = (clientId: string): AppointmentChange[] => {
+    return sampleAppointmentChanges.filter(change => change.clientId === clientId);
+  };
+
+  const handleOpenHistory = (client: Client) => {
+    setSelectedClient(client);
+    setHistoryDialogOpen(true);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -261,9 +341,28 @@ export default function ClientsPage() {
                     <p className="text-sm text-muted-foreground">{client.visits} visitas</p>
                   </div>
                 </div>
-                <Button variant="ghost" size="icon" className="h-8 w-8">
-                  <MoreVertical className="w-4 h-4" />
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                      <History className="w-4 h-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48 bg-popover">
+                    <DropdownMenuItem onClick={() => handleOpenHistory(client)} className="gap-2 cursor-pointer">
+                      <History className="w-4 h-4" />
+                      Ver Historial
+                    </DropdownMenuItem>
+                    <DropdownMenuItem className="gap-2 cursor-pointer">
+                      <Eye className="w-4 h-4" />
+                      Ver Perfil
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem className="gap-2 cursor-pointer">
+                      <Edit className="w-4 h-4" />
+                      Editar Cliente
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
 
               <div className="space-y-2 mb-4">
@@ -420,6 +519,139 @@ export default function ClientsPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Historial de Citas */}
+      <Dialog open={historyDialogOpen} onOpenChange={setHistoryDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="w-5 h-5 text-primary" />
+              Historial de Citas - {selectedClient?.name}
+            </DialogTitle>
+          </DialogHeader>
+          
+          {selectedClient && (
+            <div className="space-y-4">
+              {/* Client Summary */}
+              <div className="flex items-center gap-4 p-4 rounded-lg bg-secondary/50">
+                <img
+                  src={selectedClient.avatar}
+                  alt={selectedClient.name}
+                  className="w-12 h-12 rounded-full object-cover ring-2 ring-border"
+                />
+                <div className="flex-1">
+                  <p className="font-semibold">{selectedClient.name}</p>
+                  <p className="text-sm text-muted-foreground">ID: {selectedClient.identificationNumber}</p>
+                </div>
+                <div className="text-right">
+                  {(() => {
+                    const history = getClientHistory(selectedClient.id);
+                    const cancellations = history.filter(h => h.action === "cancelled").length;
+                    const reschedules = history.filter(h => h.action === "rescheduled").length;
+                    return (
+                      <div className="flex gap-3">
+                        <div className="text-center">
+                          <p className="text-lg font-bold text-destructive">{cancellations}</p>
+                          <p className="text-xs text-muted-foreground">Anuladas</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-lg font-bold text-info">{reschedules}</p>
+                          <p className="text-xs text-muted-foreground">Reprogramadas</p>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              {/* History List */}
+              <ScrollArea className="h-[300px] pr-4">
+                {(() => {
+                  const history = getClientHistory(selectedClient.id);
+                  
+                  if (history.length === 0) {
+                    return (
+                      <div className="flex flex-col items-center justify-center py-12 text-center">
+                        <History className="w-12 h-12 text-muted-foreground/50 mb-4" />
+                        <p className="text-muted-foreground">Este cliente no tiene cambios de citas registrados</p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="space-y-3">
+                      {history.map((change) => (
+                        <div
+                          key={change.id}
+                          className={cn(
+                            "p-4 rounded-lg border",
+                            change.action === "cancelled" 
+                              ? "bg-destructive/5 border-destructive/20" 
+                              : "bg-info/5 border-info/20"
+                          )}
+                        >
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              {change.action === "cancelled" ? (
+                                <CalendarX className="w-4 h-4 text-destructive" />
+                              ) : (
+                                <CalendarClock className="w-4 h-4 text-info" />
+                              )}
+                              <Badge 
+                                variant="outline" 
+                                className={cn(
+                                  change.action === "cancelled" 
+                                    ? "text-destructive border-destructive/30" 
+                                    : "text-info border-info/30"
+                                )}
+                              >
+                                {change.action === "cancelled" ? "Anulada" : "Reprogramada"}
+                              </Badge>
+                            </div>
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(change.createdAt).toLocaleDateString('es-ES', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric'
+                              })}
+                            </span>
+                          </div>
+                          
+                          <p className="font-medium mb-1">{change.service}</p>
+                          
+                          <div className="grid grid-cols-2 gap-2 text-sm mb-3">
+                            <div>
+                              <span className="text-muted-foreground">Fecha original: </span>
+                              <span>{change.originalDate} - {change.originalTime}</span>
+                            </div>
+                            {change.action === "rescheduled" && change.newDate && (
+                              <div>
+                                <span className="text-muted-foreground">Nueva fecha: </span>
+                                <span className="text-info">{change.newDate} - {change.newTime}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex items-start gap-2 p-2 rounded bg-background/50">
+                            <MessageSquare className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
+                            <p className="text-sm text-muted-foreground">{change.reason}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </ScrollArea>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setHistoryDialogOpen(false)}>
+                  Cerrar
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </DashboardLayout>
