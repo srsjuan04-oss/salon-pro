@@ -43,7 +43,23 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell } from "recharts";
 import { ChartContainer, ChartTooltip } from "@/components/ui/chart";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { initialClients, calculateOverdueDays, getOverdueStatus, type Client, type AppointmentChange } from "@/data/clients";
+
+const initialServices = [
+  "Corte de cabello",
+  "Corte + Tinte",
+  "Corte + Barba",
+  "Manicure",
+  "Pedicure",
+  "Tratamiento capilar",
+  "Coloración",
+  "Fade",
+];
 
 // Sample appointment changes for demo
 const sampleAppointmentChanges: AppointmentChange[] = [
@@ -112,9 +128,10 @@ export default function ClientsPage() {
     email: "",
     phone: "",
     vip: false,
-    tags: "",
+    preferredServices: [] as string[],
     identificationNumber: "",
   });
+  const [services] = useState(initialServices);
 
   const getClientHistory = (clientId: string): AppointmentChange[] => {
     return sampleAppointmentChanges.filter(change => change.clientId === clientId);
@@ -137,14 +154,14 @@ export default function ClientsPage() {
       lastVisit: "Nuevo",
       totalSpent: 0,
       vip: formData.vip,
-      tags: formData.tags.split(",").map(t => t.trim()).filter(Boolean),
+      tags: formData.preferredServices,
       balance: 0,
       identificationNumber: formData.identificationNumber,
     };
     setClients([...clients, newClient]);
     console.log("Nuevo cliente:", newClient);
     setIsDialogOpen(false);
-    setFormData({ name: "", email: "", phone: "", vip: false, tags: "", identificationNumber: "" });
+    setFormData({ name: "", email: "", phone: "", vip: false, preferredServices: [], identificationNumber: "" });
   };
 
   const filteredClients = clients.filter(client =>
@@ -489,13 +506,70 @@ export default function ClientsPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="tags">Servicios preferidos</Label>
-              <Input
-                id="tags"
-                placeholder="Ej: Corte, Coloración, Manicure (separados por coma)"
-                value={formData.tags}
-                onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
-              />
+              <Label>Servicios preferidos</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between font-normal"
+                  >
+                    {formData.preferredServices.length > 0
+                      ? `${formData.preferredServices.length} servicio(s) seleccionado(s)`
+                      : "Seleccionar servicios..."}
+                    <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[400px] p-0 bg-popover" align="start">
+                  <ScrollArea className="h-[200px]">
+                    <div className="p-2 space-y-1">
+                      {services.map((service) => {
+                        const isSelected = formData.preferredServices.includes(service);
+                        return (
+                          <button
+                            key={service}
+                            type="button"
+                            className={cn(
+                              "w-full flex items-center gap-3 p-2 rounded-md hover:bg-secondary transition-colors text-left",
+                              isSelected && "bg-primary/10"
+                            )}
+                            onClick={() => {
+                              if (isSelected) {
+                                setFormData({
+                                  ...formData,
+                                  preferredServices: formData.preferredServices.filter(s => s !== service)
+                                });
+                              } else {
+                                setFormData({
+                                  ...formData,
+                                  preferredServices: [...formData.preferredServices, service]
+                                });
+                              }
+                            }}
+                          >
+                            <div className={cn(
+                              "w-4 h-4 rounded border flex items-center justify-center",
+                              isSelected ? "bg-primary border-primary" : "border-muted-foreground"
+                            )}>
+                              {isSelected && <span className="text-primary-foreground text-xs">✓</span>}
+                            </div>
+                            <span className="text-sm">{service}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </ScrollArea>
+                </PopoverContent>
+              </Popover>
+              {formData.preferredServices.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {formData.preferredServices.map((service) => (
+                    <span key={service} className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full">
+                      {service}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="flex items-center justify-between py-2">
