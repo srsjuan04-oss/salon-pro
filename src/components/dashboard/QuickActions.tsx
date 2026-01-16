@@ -99,7 +99,7 @@ export function QuickActions() {
     email: "",
     phone: "",
     vip: false,
-    tags: "",
+    preferredServices: [] as string[],
     identificationNumber: "",
   });
 
@@ -200,13 +200,13 @@ export function QuickActions() {
           lastVisit: "Nuevo",
           totalSpent: 0,
           vip: clientData.vip,
-          tags: clientData.tags.split(",").map(t => t.trim()).filter(Boolean),
+          tags: clientData.preferredServices,
           balance: 0,
           identificationNumber: clientData.identificationNumber,
         };
         setClients([...clients, newClient]);
         console.log("Nuevo cliente:", newClient);
-        setClientData({ name: "", email: "", phone: "", vip: false, tags: "", identificationNumber: "" });
+        setClientData({ name: "", email: "", phone: "", vip: false, preferredServices: [], identificationNumber: "" });
         break;
       case "sale":
         console.log("Nueva venta:", saleData);
@@ -645,13 +645,70 @@ export function QuickActions() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="cli-tags">Servicios preferidos</Label>
-              <Input
-                id="cli-tags"
-                placeholder="Ej: Corte, Coloración (separados por coma)"
-                value={clientData.tags}
-                onChange={(e) => setClientData({ ...clientData, tags: e.target.value })}
-              />
+              <Label>Servicios preferidos</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between font-normal"
+                  >
+                    {clientData.preferredServices.length > 0
+                      ? `${clientData.preferredServices.length} servicio(s) seleccionado(s)`
+                      : "Seleccionar servicios..."}
+                    <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[400px] p-0 bg-popover" align="start">
+                  <ScrollArea className="h-[200px]">
+                    <div className="p-2 space-y-1">
+                      {services.map((service) => {
+                        const isSelected = clientData.preferredServices.includes(service);
+                        return (
+                          <button
+                            key={service}
+                            type="button"
+                            className={cn(
+                              "w-full flex items-center gap-3 p-2 rounded-md hover:bg-secondary transition-colors text-left",
+                              isSelected && "bg-primary/10"
+                            )}
+                            onClick={() => {
+                              if (isSelected) {
+                                setClientData({
+                                  ...clientData,
+                                  preferredServices: clientData.preferredServices.filter(s => s !== service)
+                                });
+                              } else {
+                                setClientData({
+                                  ...clientData,
+                                  preferredServices: [...clientData.preferredServices, service]
+                                });
+                              }
+                            }}
+                          >
+                            <div className={cn(
+                              "w-4 h-4 rounded border flex items-center justify-center",
+                              isSelected ? "bg-primary border-primary" : "border-muted-foreground"
+                            )}>
+                              {isSelected && <span className="text-primary-foreground text-xs">✓</span>}
+                            </div>
+                            <span className="text-sm">{service}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </ScrollArea>
+                </PopoverContent>
+              </Popover>
+              {clientData.preferredServices.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {clientData.preferredServices.map((service) => (
+                    <span key={service} className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full">
+                      {service}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="flex items-center justify-between py-2">
