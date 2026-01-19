@@ -33,7 +33,6 @@ interface WhatsAppWebhookBody {
 }
 
 Deno.serve(async (req) => {
-  // Handle CORS
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -48,7 +47,7 @@ Deno.serve(async (req) => {
 
     const verifyToken = Deno.env.get("META_WEBHOOK_VERIFY_TOKEN");
 
-    console.log("Webhook verification attempt:", { mode, token, verifyToken: verifyToken?.substring(0, 5) + "..." });
+    console.log("Webhook verification attempt:", { mode, tokenMatch: token === verifyToken });
 
     if (mode === "subscribe" && token === verifyToken) {
       console.log("Webhook verified successfully");
@@ -65,12 +64,10 @@ Deno.serve(async (req) => {
       const body: WhatsAppWebhookBody = await req.json();
       console.log("Received webhook:", JSON.stringify(body, null, 2));
 
-      // Initialize Supabase client
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
       const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
       const supabase = createClient(supabaseUrl, supabaseKey);
 
-      // Process each entry
       for (const entry of body.entry || []) {
         for (const change of entry.changes || []) {
           if (change.field !== "messages") continue;
@@ -81,9 +78,9 @@ Deno.serve(async (req) => {
 
           for (const message of messages) {
             const phoneNumber = message.from;
-            const contactName = contacts.find(c => c.wa_id === phoneNumber)?.profile?.name || "Unknown";
+            const contactName = contacts.find(c => c.wa_id === phoneNumber)?.profile?.name || "Cliente";
 
-            console.log(`Processing message from ${phoneNumber} (${contactName})`);
+            console.log(`Processing message from ${phoneNumber} (${contactName}): ${message.text?.body}`);
 
             // Find or create conversation
             let { data: conversation } = await supabase
@@ -100,9 +97,8 @@ Deno.serve(async (req) => {
                 .eq("phone", phoneNumber)
                 .single();
 
-              // Create customer if not exists
               if (!customer) {
-                const { data: newCustomer, error: customerError } = await supabase
+                const { data: newCustomer } = await supabase
                   .from("customers")
                   .insert({
                     name: contactName,
@@ -111,16 +107,10 @@ Deno.serve(async (req) => {
                   })
                   .select()
                   .single();
-
-                if (customerError) {
-                  console.error("Error creating customer:", customerError);
-                } else {
-                  customer = newCustomer;
-                }
+                customer = newCustomer;
               }
 
-              // Create conversation
-              const { data: newConversation, error: convError } = await supabase
+              const { data: newConversation } = await supabase
                 .from("whatsapp_conversations")
                 .insert({
                   phone_number: phoneNumber,
@@ -131,14 +121,8 @@ Deno.serve(async (req) => {
                 })
                 .select()
                 .single();
-
-              if (convError) {
-                console.error("Error creating conversation:", convError);
-                continue;
-              }
               conversation = newConversation;
             } else {
-              // Update existing conversation
               await supabase
                 .from("whatsapp_conversations")
                 .update({
@@ -149,8 +133,10 @@ Deno.serve(async (req) => {
                 .eq("id", conversation.id);
             }
 
-            // Store the message
-            const { error: msgError } = await supabase
+            if (!conversation) continue;
+
+            // Store inbound message
+            await supabase
               .from("whatsapp_messages")
               .insert({
                 conversation_id: conversation.id,
@@ -161,57 +147,74 @@ Deno.serve(async (req) => {
                 status: "received",
               });
 
-            if (msgError) {
-              console.error("Error storing message:", msgError);
-            }
-
-            // Auto-reply with appointment booking info
+            // Process text messages with AI
             if (message.type === "text" && message.text?.body) {
-              const messageText = message.text.body.toLowerCase();
-              
-              if (messageText.includes("cita") || messageText.includes("reservar") || messageText.includes("agendar")) {
-                await sendWhatsAppMessage(
-                  phoneNumber,
-                  "¡Hola! 👋 Gracias por contactarnos.\n\n📅 Para agendar tu cita, por favor indícanos:\n1. ¿Qué servicio deseas?\n2. ¿Qué día y hora prefieres?\n3. ¿Con qué barbero?\n\nTe confirmaremos la disponibilidad enseguida. 💈"
-                );
-              } else if (messageText.includes("hola") || messageText.includes("buenos")) {
-                await sendWhatsAppMessage(
-                  phoneNumber,
-                  "¡Hola! 👋 Bienvenido a nuestra barbería.\n\n¿En qué podemos ayudarte hoy?\n\n💈 Escribe 'cita' para agendar\n📋 Escribe 'servicios' para ver opciones\n⏰ Escribe 'horarios' para ver disponibilidad"
-                );
-              } else if (messageText.includes("servicio")) {
-                // Fetch services from database
-                const { data: services } = await supabase
-                  .from("services")
-                  .select("name, price, duration_minutes")
-                  .eq("is_active", true);
+              // Get recent conversation history for context
+              const { data: recentMessages } = await supabase
+                .from("whatsapp_messages")
+                .select("direction, content, created_at")
+                .eq("conversation_id", conversation.id)
+                .order("created_at", { ascending: false })
+                .limit(10);
 
-                if (services && services.length > 0) {
-                  let servicesText = "📋 *Nuestros Servicios:*\n\n";
-                  services.forEach((s, i) => {
-                    servicesText += `${i + 1}. ${s.name} - $${s.price} (${s.duration_minutes} min)\n`;
+              const conversationContext = recentMessages
+                ?.reverse()
+                .map(m => `${m.direction === "inbound" ? "Cliente" : "Asistente"}: ${m.content}`)
+                .join("\n") || "";
+
+              // Call AI Assistant
+              const aiResponse = await fetch(`${supabaseUrl}/functions/v1/ai-assistant`, {
+                method: "POST",
+                headers: {
+                  "Authorization": `Bearer ${supabaseKey}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  message: message.text.body,
+                  phone_number: phoneNumber,
+                  conversation_context: conversationContext,
+                }),
+              });
+
+              if (aiResponse.ok) {
+                const aiData = await aiResponse.json();
+                const replyMessage = aiData.response;
+
+                console.log("AI Response:", replyMessage);
+
+                // Send WhatsApp reply
+                await sendWhatsAppMessage(phoneNumber, replyMessage);
+
+                // Store outbound message
+                await supabase
+                  .from("whatsapp_messages")
+                  .insert({
+                    conversation_id: conversation.id,
+                    direction: "outbound",
+                    message_type: "text",
+                    content: replyMessage,
+                    status: "sent",
                   });
-                  servicesText += "\n¿Cuál te gustaría agendar?";
-                  await sendWhatsAppMessage(phoneNumber, servicesText);
+
+                // Update conversation context with AI action if any
+                if (aiData.action) {
+                  await supabase
+                    .from("whatsapp_conversations")
+                    .update({
+                      context: { last_action: aiData.action },
+                      last_message: replyMessage,
+                      last_message_at: new Date().toISOString(),
+                    })
+                    .eq("id", conversation.id);
                 }
-              } else if (messageText.includes("horario")) {
+              } else {
+                console.error("AI Assistant error:", await aiResponse.text());
+                // Fallback response
                 await sendWhatsAppMessage(
                   phoneNumber,
-                  "⏰ *Horarios de Atención:*\n\nLunes a Viernes: 9:00 AM - 8:00 PM\nSábados: 9:00 AM - 6:00 PM\nDomingos: Cerrado\n\n¿Te gustaría agendar una cita?"
+                  "¡Hola! 👋 Gracias por contactarnos. Un momento por favor, te atenderemos pronto."
                 );
               }
-
-              // Store outbound message
-              const replyContent = "Auto-reply sent";
-              await supabase
-                .from("whatsapp_messages")
-                .insert({
-                  conversation_id: conversation.id,
-                  direction: "outbound",
-                  message_type: "text",
-                  content: replyContent,
-                  status: "sent",
-                });
             }
           }
         }
