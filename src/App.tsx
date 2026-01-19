@@ -3,7 +3,9 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import Index from "./pages/Index";
+import AuthPage from "./pages/AuthPage";
 import CalendarPage from "./pages/CalendarPage";
 import ClientsPage from "./pages/ClientsPage";
 import StaffPage from "./pages/StaffPage";
@@ -22,14 +24,15 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/calendar" element={<CalendarPage />} />
-          <Route path="/clients" element={<ClientsPage />} />
-          <Route path="/staff" element={<StaffPage />} />
-          <Route path="/sales" element={<SalesPage />} />
-          <Route path="/expenses" element={<ExpensesPage />} />
-          <Route path="/whatsapp" element={<WhatsAppPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/auth" element={<AuthPage />} />
+          <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+          <Route path="/calendar" element={<ProtectedRoute><CalendarPage /></ProtectedRoute>} />
+          <Route path="/clients" element={<ProtectedRoute><ClientsPage /></ProtectedRoute>} />
+          <Route path="/staff" element={<ProtectedRoute><StaffPage /></ProtectedRoute>} />
+          <Route path="/sales" element={<ProtectedRoute><SalesPage /></ProtectedRoute>} />
+          <Route path="/expenses" element={<ProtectedRoute><ExpensesPage /></ProtectedRoute>} />
+          <Route path="/whatsapp" element={<ProtectedRoute><WhatsAppPage /></ProtectedRoute>} />
+          <Route path="/settings" element={<ProtectedRoute requireAdmin><SettingsPage /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

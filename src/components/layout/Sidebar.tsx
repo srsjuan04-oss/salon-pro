@@ -11,9 +11,12 @@ import {
   Settings,
   Scissors,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  LogOut
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
+import { Button } from "@/components/ui/button";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/" },
@@ -23,12 +26,19 @@ const menuItems = [
   { icon: DollarSign, label: "Ventas", path: "/sales" },
   { icon: Receipt, label: "Gastos", path: "/expenses" },
   { icon: MessageCircle, label: "WhatsApp", path: "/whatsapp" },
-  { icon: Settings, label: "Configuración", path: "/settings" },
+  { icon: Settings, label: "Configuración", path: "/settings", adminOnly: true },
 ];
 
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
+  const { user, signOut, isAdmin } = useAuth();
+
+  const handleLogout = async () => {
+    await signOut();
+  };
+
+  const visibleMenuItems = menuItems.filter(item => !item.adminOnly || isAdmin);
 
   return (
     <aside 
@@ -52,7 +62,7 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-1">
-        {menuItems.map((item) => {
+        {visibleMenuItems.map((item) => {
           const isActive = location.pathname === item.path;
           return (
             <Link
@@ -81,6 +91,45 @@ export function Sidebar() {
           );
         })}
       </nav>
+
+      {/* User Info & Logout */}
+      {!collapsed && user && (
+        <div className="px-4 py-3 border-t border-sidebar-border/20">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-8 h-8 rounded-full bg-sidebar-accent flex items-center justify-center">
+              <UserCircle className="w-5 h-5 text-sidebar-foreground/70" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-sidebar-foreground truncate">
+                {user.email}
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleLogout}
+            className="w-full justify-start text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+          >
+            <LogOut className="w-4 h-4 mr-2" />
+            Cerrar Sesión
+          </Button>
+        </div>
+      )}
+
+      {collapsed && user && (
+        <div className="px-3 py-3 border-t border-sidebar-border/20">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleLogout}
+            className="w-full text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+            title="Cerrar Sesión"
+          >
+            <LogOut className="w-5 h-5" />
+          </Button>
+        </div>
+      )}
 
       {/* Collapse Button */}
       <button
