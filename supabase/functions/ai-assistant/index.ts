@@ -128,11 +128,11 @@ ${customer ? `CLIENTE: ${customer.name}` : "CLIENTE: Nuevo cliente"}
 
 ${upcomingAppointments.length > 0 ? `
 PRÓXIMAS CITAS DEL CLIENTE:
-${upcomingAppointments.map(a => `- ${a.appointment_date} a las ${a.start_time} con ${a.barber?.name} (${a.service?.name})`).join("\n")}
+${upcomingAppointments.map(a => `- ID: ${a.id} | ${a.appointment_date} a las ${a.start_time} con ${a.barber?.name} (${a.service?.name})`).join("\n")}
 ` : ""}
 
 INSTRUCCIONES:
-1. Saluda amablemente y ayuda a agendar citas
+1. Saluda amablemente y ayuda a agendar, reagendar o cancelar citas
 2. Cuando el cliente quiera agendar, pregunta por:
    - Servicio deseado
    - Barbero preferido (o sugerir según disponibilidad)
@@ -140,10 +140,10 @@ INSTRUCCIONES:
 3. IMPORTANTE: Verifica la disponibilidad antes de confirmar. Si el horario está ocupado, sugiere alternativas.
 4. ANTES de confirmar la cita, pregunta por el correo electrónico del cliente para enviarle recordatorio y agregarlo a su calendario
 5. Confirma toda la información antes de agendar
-6. Si el cliente tiene citas próximas, infórmale
+6. Si el cliente tiene citas próximas, infórmale y ofrece reagendar si lo desea
 7. Responde siempre en español de México
 8. Sé conciso pero amable (máximo 3-4 líneas por respuesta)
-9. Usa emojis con moderación (💈, ✂️, 📅, ✅)
+9. Usa emojis con moderación (💈, ✂️, 📅, ✅, 🔄)
 
 FLUJO DE AGENDADO:
 1. Recopilar: servicio, barbero, fecha, hora
@@ -151,6 +151,13 @@ FLUJO DE AGENDADO:
 3. Pedir correo electrónico (obligatorio para el recordatorio de calendario)
 4. Confirmar todos los datos con el cliente
 5. Solo entonces usar el formato de agendar
+
+FLUJO DE REAGENDADO:
+1. Identificar qué cita quiere cambiar (si tiene varias, preguntar cuál)
+2. Preguntar nueva fecha y hora deseada
+3. Verificar disponibilidad del nuevo horario
+4. Confirmar el cambio con el cliente
+5. Usar el formato de reagendar
 
 CUANDO TENGAS TODOS LOS DATOS PARA AGENDAR Y HAYAS VERIFICADO DISPONIBILIDAD, responde con un formato especial:
 [AGENDAR_CITA]
@@ -165,6 +172,19 @@ SOLO usa el formato de agendar si:
 1. Tienes servicio, barbero, fecha, hora Y email confirmados por el cliente
 2. El horario está disponible según la información de disponibilidad
 3. El cliente ha confirmado que todos los datos son correctos
+
+Si el cliente quiere REAGENDAR una cita existente, responde con:
+[REAGENDAR_CITA]
+cita_original: <fecha original YYYY-MM-DD>
+nueva_fecha: <YYYY-MM-DD>
+nueva_hora: <HH:MM>
+barbero: <nombre del barbero, puede ser el mismo o diferente>
+[/REAGENDAR_CITA]
+
+SOLO usa el formato de reagendar si:
+1. El cliente tiene una cita existente que quiere cambiar
+2. Has verificado disponibilidad del nuevo horario
+3. El cliente ha confirmado el cambio
 
 Si el cliente quiere cancelar una cita, responde con:
 [CANCELAR_CITA]
@@ -335,6 +355,100 @@ ${conversation_context ? `CONTEXTO DE LA CONVERSACIÓN:\n${conversation_context}
       }
       
       cleanResponse = cleanResponse.replace(/\[CANCELAR_CITA\][\s\S]*?\[\/CANCELAR_CITA\]/g, "").trim() || cleanResponse;
+    }
+
+    // Check for reschedule action
+    const rescheduleMatch = assistantMessage.match(/\[REAGENDAR_CITA\]([\s\S]*?)\[\/REAGENDAR_CITA\]/);
+    if (rescheduleMatch && customer) {
+      const rescheduleData = rescheduleMatch[1];
+      const citaOriginalMatch = rescheduleData.match(/cita_original:\s*(\d{4}-\d{2}-\d{2})/i);
+      const nuevaFechaMatch = rescheduleData.match(/nueva_fecha:\s*(\d{4}-\d{2}-\d{2})/i);
+      const nuevaHoraMatch = rescheduleData.match(/nueva_hora:\s*(\d{2}:\d{2})/i);
+      const barberoMatch = rescheduleData.match(/barbero:\s*(.+)/i);
+
+      if (citaOriginalMatch && nuevaFechaMatch && nuevaHoraMatch) {
+        const originalDate = citaOriginalMatch[1];
+        const newDate = nuevaFechaMatch[1];
+        const newTime = nuevaHoraMatch[1];
+        const barberName = barberoMatch ? barberoMatch[1].trim() : null;
+
+        // Find the original appointment
+        const { data: originalAppointment } = await supabase
+          .from("appointments")
+          .select(`
+            *,
+            barber:barbers(id, name),
+            service:services(id, name, price, duration_minutes)
+          `)
+          .eq("customer_id", customer.id)
+          .eq("appointment_date", originalDate)
+          .neq("status", "cancelled")
+          .maybeSingle();
+
+        if (originalAppointment) {
+          // Determine barber (same or different)
+          let targetBarberId = originalAppointment.barber_id;
+          let targetBarberName = originalAppointment.barber?.name;
+          
+          if (barberName) {
+            const newBarber = barbers.find(b => 
+              b.name.toLowerCase().includes(barberName.toLowerCase()) ||
+              barberName.toLowerCase().includes(b.name.toLowerCase())
+            );
+            if (newBarber) {
+              targetBarberId = newBarber.id;
+              targetBarberName = newBarber.name;
+            }
+          }
+
+          // Check availability for new slot (excluding the original appointment)
+          const durationMinutes = originalAppointment.service?.duration_minutes || 30;
+          const otherAppointments = appointments.filter(a => a.id !== originalAppointment.id);
+          const isAvailable = checkAvailability(targetBarberId, newDate, newTime, durationMinutes, otherAppointments);
+
+          if (!isAvailable) {
+            cleanResponse = `😔 Lo siento, ese nuevo horario ya está ocupado. ¿Te gustaría que te sugiera otros horarios disponibles?`;
+          } else {
+            // Calculate new end time
+            const [hours, minutes] = newTime.split(":").map(Number);
+            const endMinutes = hours * 60 + minutes + durationMinutes;
+            const newEndTime = `${Math.floor(endMinutes / 60).toString().padStart(2, "0")}:${(endMinutes % 60).toString().padStart(2, "0")}`;
+
+            // Update the appointment (keeps history by updating, not deleting)
+            const { data: updatedAppointment, error: updateError } = await supabase
+              .from("appointments")
+              .update({
+                appointment_date: newDate,
+                start_time: newTime,
+                end_time: newEndTime,
+                barber_id: targetBarberId,
+                status: "confirmed",
+                notes: `Reagendado desde ${originalDate} ${originalAppointment.start_time}. ${originalAppointment.notes || ""}`
+              })
+              .eq("id", originalAppointment.id)
+              .select()
+              .single();
+
+            if (updateError) {
+              console.error("Error rescheduling appointment:", updateError);
+              cleanResponse = "Hubo un problema al reagendar tu cita. Por favor intenta de nuevo. 😔";
+            } else {
+              action = { 
+                type: "booking_rescheduled", 
+                appointment: updatedAppointment,
+                previous_date: originalDate,
+                previous_time: originalAppointment.start_time
+              };
+              const formattedNewDate = new Date(newDate + "T12:00:00").toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" });
+              cleanResponse = `🔄 ¡Cita reagendada con éxito!\n\n📅 Nueva fecha: ${formattedNewDate} a las ${newTime}\n💈 Con ${targetBarberName}\n\n¡Te esperamos! 🙌`;
+            }
+          }
+        } else {
+          cleanResponse = `No encontré una cita activa para el ${originalDate}. ¿Podrías verificar la fecha de tu cita original?`;
+        }
+      }
+
+      cleanResponse = cleanResponse.replace(/\[REAGENDAR_CITA\][\s\S]*?\[\/REAGENDAR_CITA\]/g, "").trim() || cleanResponse;
     }
 
     return new Response(
