@@ -32,6 +32,15 @@ interface BarberSchedule {
   is_available: boolean;
 }
 
+interface Appointment {
+  id: string;
+  barber_id: string;
+  appointment_date: string;
+  start_time: string;
+  end_time: string;
+  status: string;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -56,17 +65,31 @@ Deno.serve(async (req) => {
     const barbers: Barber[] = barbersRes.data || [];
     const schedules: BarberSchedule[] = schedulesRes.data || [];
 
+    // Get today and next 7 days appointments for availability check
+    const today = new Date();
+    const nextWeek = new Date(today);
+    nextWeek.setDate(nextWeek.getDate() + 7);
+
+    const { data: existingAppointments } = await supabase
+      .from("appointments")
+      .select("*")
+      .gte("appointment_date", today.toISOString().split("T")[0])
+      .lte("appointment_date", nextWeek.toISOString().split("T")[0])
+      .neq("status", "cancelled");
+
+    const appointments: Appointment[] = existingAppointments || [];
+
     // Check if customer exists
     const { data: customer } = await supabase
       .from("customers")
       .select("*")
       .eq("phone", phone_number)
-      .single();
+      .maybeSingle();
 
     // Get upcoming appointments for this customer
     let upcomingAppointments: any[] = [];
     if (customer) {
-      const { data: appointments } = await supabase
+      const { data: customerAppointments } = await supabase
         .from("appointments")
         .select(`
           *,
@@ -74,14 +97,17 @@ Deno.serve(async (req) => {
           service:services(name, price)
         `)
         .eq("customer_id", customer.id)
-        .gte("appointment_date", new Date().toISOString().split("T")[0])
+        .gte("appointment_date", today.toISOString().split("T")[0])
+        .neq("status", "cancelled")
         .order("appointment_date", { ascending: true })
         .limit(5);
-      upcomingAppointments = appointments || [];
+      upcomingAppointments = customerAppointments || [];
     }
 
-    const today = new Date();
     const dayNames = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+
+    // Build availability info for each barber for the next 3 days
+    const availabilityInfo = buildAvailabilityInfo(barbers, schedules, appointments, today);
 
     const systemPrompt = `Eres un asistente virtual amigable y profesional para una barbería. Tu nombre es "Asistente StyleBook".
 
@@ -94,6 +120,9 @@ ${services.map(s => `- ${s.name}: $${s.price} MXN (${s.duration_minutes} min)`).
 
 BARBEROS DISPONIBLES:
 ${barbers.map(b => `- ${b.name}${b.specialty ? ` (Especialidad: ${b.specialty})` : ""}`).join("\n")}
+
+DISPONIBILIDAD PRÓXIMOS DÍAS:
+${availabilityInfo}
 
 ${customer ? `CLIENTE: ${customer.name}` : "CLIENTE: Nuevo cliente"}
 
@@ -108,19 +137,24 @@ INSTRUCCIONES:
    - Servicio deseado
    - Barbero preferido (o sugerir según disponibilidad)
    - Fecha y hora preferida
-3. Confirma toda la información antes de agendar
-4. Si el cliente tiene citas próximas, infórmale
-5. Responde siempre en español de México
-6. Sé conciso pero amable (máximo 3-4 líneas por respuesta)
-7. Usa emojis con moderación (💈, ✂️, 📅, ✅)
+3. IMPORTANTE: Verifica la disponibilidad antes de confirmar. Si el horario está ocupado, sugiere alternativas.
+4. Confirma toda la información antes de agendar
+5. Si el cliente tiene citas próximas, infórmale
+6. Responde siempre en español de México
+7. Sé conciso pero amable (máximo 3-4 líneas por respuesta)
+8. Usa emojis con moderación (💈, ✂️, 📅, ✅)
 
-CUANDO TENGAS TODOS LOS DATOS PARA AGENDAR, responde con un formato especial:
+CUANDO TENGAS TODOS LOS DATOS PARA AGENDAR Y HAYAS VERIFICADO DISPONIBILIDAD, responde con un formato especial:
 [AGENDAR_CITA]
-servicio: <nombre del servicio>
-barbero: <nombre del barbero>
+servicio: <nombre del servicio exacto>
+barbero: <nombre del barbero exacto>
 fecha: <YYYY-MM-DD>
 hora: <HH:MM>
 [/AGENDAR_CITA]
+
+SOLO usa el formato de agendar si:
+1. Tienes servicio, barbero, fecha Y hora confirmados por el cliente
+2. El horario está disponible según la información de disponibilidad
 
 Si el cliente quiere cancelar una cita, responde con:
 [CANCELAR_CITA]
@@ -200,52 +234,60 @@ ${conversation_context ? `CONTEXTO DE LA CONVERSACIÓN:\n${conversation_context}
         );
 
         if (service && barber) {
-          // Create or get customer
-          let customerId = customer?.id;
-          if (!customerId) {
-            const { data: newCustomer } = await supabase
-              .from("customers")
-              .insert({ name: "Cliente WhatsApp", phone: phone_number, whatsapp_id: phone_number })
-              .select()
-              .single();
-            customerId = newCustomer?.id;
-          }
+          // Check if slot is available
+          const isAvailable = checkAvailability(barber.id, date, time, service.duration_minutes, appointments);
 
-          if (customerId) {
-            // Calculate end time
-            const [hours, minutes] = time.split(":").map(Number);
-            const endMinutes = hours * 60 + minutes + service.duration_minutes;
-            const endTime = `${Math.floor(endMinutes / 60).toString().padStart(2, "0")}:${(endMinutes % 60).toString().padStart(2, "0")}`;
+          if (!isAvailable) {
+            cleanResponse = `😔 Lo siento, ese horario ya está ocupado. ¿Te gustaría que te sugiera otros horarios disponibles con ${barber.name}?`;
+          } else {
+            // Create or get customer
+            let customerId = customer?.id;
+            if (!customerId) {
+              const { data: newCustomer } = await supabase
+                .from("customers")
+                .insert({ name: "Cliente WhatsApp", phone: phone_number, whatsapp_id: phone_number })
+                .select()
+                .single();
+              customerId = newCustomer?.id;
+            }
 
-            // Create appointment
-            const { data: appointment, error: appointmentError } = await supabase
-              .from("appointments")
-              .insert({
-                customer_id: customerId,
-                barber_id: barber.id,
-                service_id: service.id,
-                appointment_date: date,
-                start_time: time,
-                end_time: endTime,
-                status: "confirmed",
-                source: "whatsapp",
-              })
-              .select()
-              .single();
+            if (customerId) {
+              // Calculate end time
+              const [hours, minutes] = time.split(":").map(Number);
+              const endMinutes = hours * 60 + minutes + service.duration_minutes;
+              const endTime = `${Math.floor(endMinutes / 60).toString().padStart(2, "0")}:${(endMinutes % 60).toString().padStart(2, "0")}`;
 
-            if (appointmentError) {
-              console.error("Error creating appointment:", appointmentError);
-              cleanResponse = "Hubo un problema al agendar tu cita. Por favor intenta de nuevo o contacta directamente al salón. 😔";
-            } else {
-              action = { type: "booking_created", appointment };
-              cleanResponse = `✅ ¡Cita agendada con éxito!\n\n📅 ${date} a las ${time}\n💈 ${service.name} con ${barber.name}\n💵 $${service.price} MXN\n\n¡Te esperamos! 🙌`;
+              // Create appointment
+              const { data: appointment, error: appointmentError } = await supabase
+                .from("appointments")
+                .insert({
+                  customer_id: customerId,
+                  barber_id: barber.id,
+                  service_id: service.id,
+                  appointment_date: date,
+                  start_time: time,
+                  end_time: endTime,
+                  status: "confirmed",
+                  source: "whatsapp",
+                })
+                .select()
+                .single();
+
+              if (appointmentError) {
+                console.error("Error creating appointment:", appointmentError);
+                cleanResponse = "Hubo un problema al agendar tu cita. Por favor intenta de nuevo o contacta directamente al salón. 😔";
+              } else {
+                action = { type: "booking_created", appointment };
+                const formattedDate = new Date(date + "T12:00:00").toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" });
+                cleanResponse = `✅ ¡Cita agendada con éxito!\n\n📅 ${formattedDate} a las ${time}\n💈 ${service.name} con ${barber.name}\n💵 $${service.price} MXN\n\n¡Te esperamos! 🙌`;
+              }
             }
           }
         }
       }
       
       // Remove the booking tags from response if we handled it
-      cleanResponse = cleanResponse.replace(/\[AGENDAR_CITA\][\s\S]*?\[\/AGENDAR_CITA\]/g, "").trim();
+      cleanResponse = cleanResponse.replace(/\[AGENDAR_CITA\][\s\S]*?\[\/AGENDAR_CITA\]/g, "").trim() || cleanResponse;
     }
 
     // Check for cancellation action
@@ -261,20 +303,23 @@ ${conversation_context ? `CONTEXTO DE LA CONVERSACIÓN:\n${conversation_context}
           .update({ status: "cancelled" })
           .eq("customer_id", customer.id)
           .eq("appointment_date", date)
+          .neq("status", "cancelled")
           .select()
-          .single();
+          .maybeSingle();
 
         if (cancelled && !cancelError) {
           action = { type: "booking_cancelled", appointment: cancelled };
           cleanResponse = `✅ Tu cita del ${date} ha sido cancelada. Si deseas reagendar, estoy aquí para ayudarte. 📅`;
+        } else {
+          cleanResponse = `No encontré una cita activa para esa fecha. ¿Podrías verificar la fecha?`;
         }
       }
       
-      cleanResponse = cleanResponse.replace(/\[CANCELAR_CITA\][\s\S]*?\[\/CANCELAR_CITA\]/g, "").trim();
+      cleanResponse = cleanResponse.replace(/\[CANCELAR_CITA\][\s\S]*?\[\/CANCELAR_CITA\]/g, "").trim() || cleanResponse;
     }
 
     return new Response(
-      JSON.stringify({ response: cleanResponse || assistantMessage, action }),
+      JSON.stringify({ response: cleanResponse, action }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
@@ -290,3 +335,72 @@ ${conversation_context ? `CONTEXTO DE LA CONVERSACIÓN:\n${conversation_context}
     );
   }
 });
+
+function buildAvailabilityInfo(
+  barbers: Barber[], 
+  schedules: BarberSchedule[], 
+  appointments: Appointment[],
+  today: Date
+): string {
+  const dayNames = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+  const lines: string[] = [];
+
+  // Check next 3 days
+  for (let dayOffset = 0; dayOffset < 3; dayOffset++) {
+    const date = new Date(today);
+    date.setDate(date.getDate() + dayOffset);
+    const dateStr = date.toISOString().split("T")[0];
+    const dayOfWeek = date.getDay();
+    const dayName = dayNames[dayOfWeek];
+
+    if (dayOfWeek === 0) continue; // Sunday - closed
+
+    lines.push(`\n${dayName} ${date.getDate()}:`);
+
+    for (const barber of barbers) {
+      const dayAppointments = appointments.filter(
+        a => a.barber_id === barber.id && a.appointment_date === dateStr
+      );
+
+      const busyTimes = dayAppointments.map(a => `${a.start_time.slice(0, 5)}-${a.end_time.slice(0, 5)}`);
+      
+      if (busyTimes.length === 0) {
+        lines.push(`  - ${barber.name}: Disponible todo el día (9:00-${dayOfWeek === 6 ? "18:00" : "20:00"})`);
+      } else {
+        lines.push(`  - ${barber.name}: Ocupado ${busyTimes.join(", ")}`);
+      }
+    }
+  }
+
+  return lines.join("\n");
+}
+
+function checkAvailability(
+  barberId: string,
+  date: string,
+  time: string,
+  durationMinutes: number,
+  appointments: Appointment[]
+): boolean {
+  const [hour, minute] = time.split(":").map(Number);
+  const startMinutes = hour * 60 + minute;
+  const endMinutes = startMinutes + durationMinutes;
+
+  const barberAppointments = appointments.filter(
+    a => a.barber_id === barberId && a.appointment_date === date && a.status !== "cancelled"
+  );
+
+  for (const apt of barberAppointments) {
+    const [aptStartH, aptStartM] = apt.start_time.split(":").map(Number);
+    const [aptEndH, aptEndM] = apt.end_time.split(":").map(Number);
+    const aptStart = aptStartH * 60 + aptStartM;
+    const aptEnd = aptEndH * 60 + aptEndM;
+
+    // Check for overlap
+    if (startMinutes < aptEnd && endMinutes > aptStart) {
+      return false;
+    }
+  }
+
+  return true;
+}
