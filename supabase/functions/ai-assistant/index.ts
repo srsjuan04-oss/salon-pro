@@ -138,11 +138,19 @@ INSTRUCCIONES:
    - Barbero preferido (o sugerir según disponibilidad)
    - Fecha y hora preferida
 3. IMPORTANTE: Verifica la disponibilidad antes de confirmar. Si el horario está ocupado, sugiere alternativas.
-4. Confirma toda la información antes de agendar
-5. Si el cliente tiene citas próximas, infórmale
-6. Responde siempre en español de México
-7. Sé conciso pero amable (máximo 3-4 líneas por respuesta)
-8. Usa emojis con moderación (💈, ✂️, 📅, ✅)
+4. ANTES de confirmar la cita, pregunta por el correo electrónico del cliente para enviarle recordatorio y agregarlo a su calendario
+5. Confirma toda la información antes de agendar
+6. Si el cliente tiene citas próximas, infórmale
+7. Responde siempre en español de México
+8. Sé conciso pero amable (máximo 3-4 líneas por respuesta)
+9. Usa emojis con moderación (💈, ✂️, 📅, ✅)
+
+FLUJO DE AGENDADO:
+1. Recopilar: servicio, barbero, fecha, hora
+2. Verificar disponibilidad
+3. Pedir correo electrónico (obligatorio para el recordatorio de calendario)
+4. Confirmar todos los datos con el cliente
+5. Solo entonces usar el formato de agendar
 
 CUANDO TENGAS TODOS LOS DATOS PARA AGENDAR Y HAYAS VERIFICADO DISPONIBILIDAD, responde con un formato especial:
 [AGENDAR_CITA]
@@ -150,11 +158,13 @@ servicio: <nombre del servicio exacto>
 barbero: <nombre del barbero exacto>
 fecha: <YYYY-MM-DD>
 hora: <HH:MM>
+email: <correo del cliente>
 [/AGENDAR_CITA]
 
 SOLO usa el formato de agendar si:
-1. Tienes servicio, barbero, fecha Y hora confirmados por el cliente
+1. Tienes servicio, barbero, fecha, hora Y email confirmados por el cliente
 2. El horario está disponible según la información de disponibilidad
+3. El cliente ha confirmado que todos los datos son correctos
 
 Si el cliente quiere cancelar una cita, responde con:
 [CANCELAR_CITA]
@@ -217,11 +227,14 @@ ${conversation_context ? `CONTEXTO DE LA CONVERSACIÓN:\n${conversation_context}
       const fechaMatch = bookingData.match(/fecha:\s*(\d{4}-\d{2}-\d{2})/i);
       const horaMatch = bookingData.match(/hora:\s*(\d{2}:\d{2})/i);
 
-      if (servicioMatch && barberoMatch && fechaMatch && horaMatch) {
+      const emailMatch = bookingData.match(/email:\s*(.+)/i);
+
+      if (servicioMatch && barberoMatch && fechaMatch && horaMatch && emailMatch) {
         const serviceName = servicioMatch[1].trim();
         const barberName = barberoMatch[1].trim();
         const date = fechaMatch[1];
         const time = horaMatch[1];
+        const email = emailMatch[1].trim();
 
         // Find service and barber
         const service = services.find(s => 
@@ -240,15 +253,21 @@ ${conversation_context ? `CONTEXTO DE LA CONVERSACIÓN:\n${conversation_context}
           if (!isAvailable) {
             cleanResponse = `😔 Lo siento, ese horario ya está ocupado. ¿Te gustaría que te sugiera otros horarios disponibles con ${barber.name}?`;
           } else {
-            // Create or get customer
+            // Create or get customer (and update email if exists)
             let customerId = customer?.id;
             if (!customerId) {
               const { data: newCustomer } = await supabase
                 .from("customers")
-                .insert({ name: "Cliente WhatsApp", phone: phone_number, whatsapp_id: phone_number })
+                .insert({ name: "Cliente WhatsApp", phone: phone_number, whatsapp_id: phone_number, email })
                 .select()
                 .single();
               customerId = newCustomer?.id;
+            } else if (email && email !== customer?.email) {
+              // Update customer email if different
+              await supabase
+                .from("customers")
+                .update({ email })
+                .eq("id", customer.id);
             }
 
             if (customerId) {
