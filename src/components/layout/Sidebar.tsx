@@ -8,6 +8,7 @@ import {
   DollarSign, 
   Receipt,
   MessageCircle,
+  Zap,
   Settings,
   Scissors,
   ChevronLeft,
@@ -26,6 +27,7 @@ const menuItems = [
   { icon: DollarSign, label: "Ventas", path: "/sales" },
   { icon: Receipt, label: "Gastos", path: "/expenses" },
   { icon: MessageCircle, label: "WhatsApp", path: "/whatsapp" },
+  { icon: Zap, label: "Automatización", path: "/automation" },
   { icon: Settings, label: "Configuración", path: "/settings", adminOnly: true },
 ];
 

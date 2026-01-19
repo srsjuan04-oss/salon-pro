@@ -194,6 +194,50 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_flows: {
+        Row: {
+          created_at: string
+          custom_message: string | null
+          id: string
+          is_active: boolean
+          name: string
+          template_id: string | null
+          trigger_minutes: number
+          trigger_type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          custom_message?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          template_id?: string | null
+          trigger_minutes: number
+          trigger_type: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          custom_message?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          template_id?: string | null
+          trigger_minutes?: number
+          trigger_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_flows_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -223,6 +267,48 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      sent_notifications: {
+        Row: {
+          appointment_id: string
+          flow_id: string
+          id: string
+          sent_at: string
+          status: string | null
+          whatsapp_message_id: string | null
+        }
+        Insert: {
+          appointment_id: string
+          flow_id: string
+          id?: string
+          sent_at?: string
+          status?: string | null
+          whatsapp_message_id?: string | null
+        }
+        Update: {
+          appointment_id?: string
+          flow_id?: string
+          id?: string
+          sent_at?: string
+          status?: string | null
+          whatsapp_message_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sent_notifications_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sent_notifications_flow_id_fkey"
+            columns: ["flow_id"]
+            isOneToOne: false
+            referencedRelation: "notification_flows"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       services: {
         Row: {
@@ -359,6 +445,57 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      whatsapp_templates: {
+        Row: {
+          body_text: string
+          buttons: Json | null
+          category: string
+          created_at: string
+          footer_text: string | null
+          header_content: string | null
+          header_type: string | null
+          id: string
+          language: string
+          meta_rejection_reason: string | null
+          meta_status: string | null
+          meta_template_id: string | null
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          body_text: string
+          buttons?: Json | null
+          category?: string
+          created_at?: string
+          footer_text?: string | null
+          header_content?: string | null
+          header_type?: string | null
+          id?: string
+          language?: string
+          meta_rejection_reason?: string | null
+          meta_status?: string | null
+          meta_template_id?: string | null
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          body_text?: string
+          buttons?: Json | null
+          category?: string
+          created_at?: string
+          footer_text?: string | null
+          header_content?: string | null
+          header_type?: string | null
+          id?: string
+          language?: string
+          meta_rejection_reason?: string | null
+          meta_status?: string | null
+          meta_template_id?: string | null
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
     }
     Views: {
