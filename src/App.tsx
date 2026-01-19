@@ -12,6 +12,7 @@ import StaffPage from "./pages/StaffPage";
 import SalesPage from "./pages/SalesPage";
 import ExpensesPage from "./pages/ExpensesPage";
 import WhatsAppPage from "./pages/WhatsAppPage";
+import AutomationPage from "./pages/AutomationPage";
 import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
 
@@ -32,6 +33,7 @@ const App = () => (
           <Route path="/sales" element={<ProtectedRoute><SalesPage /></ProtectedRoute>} />
           <Route path="/expenses" element={<ProtectedRoute><ExpensesPage /></ProtectedRoute>} />
           <Route path="/whatsapp" element={<ProtectedRoute><WhatsAppPage /></ProtectedRoute>} />
+          <Route path="/automation" element={<ProtectedRoute><AutomationPage /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute requireAdmin><SettingsPage /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
