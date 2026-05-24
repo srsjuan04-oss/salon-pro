@@ -236,11 +236,13 @@ export default function SalesPage() {
     setFormData({ client: "", service: "", amount: "", paymentMethod: "" });
   };
 
-  const markAsPaid = (saleId: string, method: string) => {
+  const markAsPaid = async (saleId: string, method: string) => {
+    await supabase.from("appointments").update({ status: "completed" }).eq("id", saleId);
     setSales(prev => prev.map(sale => 
       sale.id === saleId ? { ...sale, status: "paid" as const, method } : sale
     ));
   };
+
 
   const filteredSales = activeTab === "all" 
     ? dateFilteredSales 
