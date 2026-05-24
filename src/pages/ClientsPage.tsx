@@ -257,27 +257,40 @@ export default function ClientsPage() {
     setHistoryDialogOpen(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const { data, error } = await supabase
+      .from("customers")
+      .insert({
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+      })
+      .select()
+      .single();
+    if (error) {
+      console.error("Error creando cliente:", error);
+      return;
+    }
     const newClient: Client = {
-      id: String(clients.length + 1),
-      name: formData.name,
-      email: formData.email,
-      phone: formData.phone,
-      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.name)}&background=random`,
+      id: data.id,
+      name: data.name,
+      email: data.email ?? "",
+      phone: data.phone ?? "",
+      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(data.name)}&background=random`,
       visits: 0,
-      lastVisit: "Nuevo",
+      lastVisit: "Sin visitas",
       totalSpent: 0,
       vip: formData.vip,
       tags: formData.preferredServices,
       balance: 0,
-      identificationNumber: formData.identificationNumber,
+      identificationNumber: data.id.slice(0, 8),
     };
-    setClients([...clients, newClient]);
-    console.log("Nuevo cliente:", newClient);
+    setClients([newClient, ...clients]);
     setIsDialogOpen(false);
     setFormData({ name: "", email: "", phone: "", vip: false, preferredServices: [], identificationNumber: "" });
   };
+
 
   const filteredClients = clients.filter(client =>
     client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
