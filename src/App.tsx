@@ -6,6 +6,8 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import Index from "./pages/Index";
 import AuthPage from "./pages/AuthPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
+
 import CalendarPage from "./pages/CalendarPage";
 import ClientsPage from "./pages/ClientsPage";
 import StaffPage from "./pages/StaffPage";
@@ -26,6 +28,8 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/auth" element={<AuthPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+
           <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
           <Route path="/calendar" element={<ProtectedRoute><CalendarPage /></ProtectedRoute>} />
           <Route path="/clients" element={<ProtectedRoute><ClientsPage /></ProtectedRoute>} />
