@@ -14,6 +14,62 @@ export type Database = {
   }
   public: {
     Tables: {
+      appointment_reminders: {
+        Row: {
+          appointment_id: string
+          created_at: string
+          customer_name: string | null
+          customer_phone: string
+          error_message: string | null
+          id: string
+          reminder_type: string
+          scheduled_at: string
+          sent_at: string | null
+          status: string
+          updated_at: string
+          whapify_flow_id: string | null
+          whapify_response: Json | null
+        }
+        Insert: {
+          appointment_id: string
+          created_at?: string
+          customer_name?: string | null
+          customer_phone: string
+          error_message?: string | null
+          id?: string
+          reminder_type: string
+          scheduled_at: string
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+          whapify_flow_id?: string | null
+          whapify_response?: Json | null
+        }
+        Update: {
+          appointment_id?: string
+          created_at?: string
+          customer_name?: string | null
+          customer_phone?: string
+          error_message?: string | null
+          id?: string
+          reminder_type?: string
+          scheduled_at?: string
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+          whapify_flow_id?: string | null
+          whapify_response?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "appointment_reminders_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       appointments: {
         Row: {
           apple_event_id: string | null
@@ -268,6 +324,39 @@ export type Database = {
         }
         Relationships: []
       }
+      reminder_settings: {
+        Row: {
+          active: boolean
+          channel: string
+          created_at: string
+          id: string
+          minutes_before: number
+          reminder_type: string
+          updated_at: string
+          whapify_flow_id: string | null
+        }
+        Insert: {
+          active?: boolean
+          channel?: string
+          created_at?: string
+          id?: string
+          minutes_before: number
+          reminder_type: string
+          updated_at?: string
+          whapify_flow_id?: string | null
+        }
+        Update: {
+          active?: boolean
+          channel?: string
+          created_at?: string
+          id?: string
+          minutes_before?: number
+          reminder_type?: string
+          updated_at?: string
+          whapify_flow_id?: string | null
+        }
+        Relationships: []
+      }
       schedule_settings: {
         Row: {
           created_at: string
@@ -388,6 +477,72 @@ export type Database = {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
+        }
+        Relationships: []
+      }
+      whapify_flows: {
+        Row: {
+          created_at: string
+          flow_id: string
+          flow_name: string
+          id: string
+          is_active: boolean
+          raw_data: Json | null
+          synced_at: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          flow_id: string
+          flow_name: string
+          id?: string
+          is_active?: boolean
+          raw_data?: Json | null
+          synced_at?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          flow_id?: string
+          flow_name?: string
+          id?: string
+          is_active?: boolean
+          raw_data?: Json | null
+          synced_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      whapify_settings: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          last_synced_at: string | null
+          last_validated_at: string | null
+          singleton: boolean
+          updated_at: string
+          whapify_token: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          last_synced_at?: string | null
+          last_validated_at?: string | null
+          singleton?: boolean
+          updated_at?: string
+          whapify_token?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          last_synced_at?: string | null
+          last_validated_at?: string | null
+          singleton?: boolean
+          updated_at?: string
+          whapify_token?: string | null
         }
         Relationships: []
       }
