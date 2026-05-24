@@ -83,22 +83,37 @@ mcp.tool("list_barbers", {
   },
 });
 
+// Defaults configurables: jornada 10:00-20:00 con bloques de 40 minutos.
+const DEFAULT_DAY_START = "10:00";
+const DEFAULT_DAY_END   = "20:00";
+const DEFAULT_SLOT_MIN  = 40;
+
 mcp.tool("get_availability", {
-  description: "Horarios disponibles por barbero para una fecha (YYYY-MM-DD). barber_id y service_id aceptan UUID o nombre.",
+  description:
+    "Horarios disponibles por barbero para una fecha (YYYY-MM-DD). " +
+    "Por defecto jornada 10:00-20:00 con bloques de 40 min. " +
+    "Se puede sobreescribir con day_start, day_end y slot_minutes. " +
+    "barber_id y service_id aceptan UUID o nombre.",
   inputSchema: z.object({
     date: z.string().describe("Fecha YYYY-MM-DD"),
     barber_id: z.string().optional().describe("UUID o nombre del barbero"),
     service_id: z.string().optional().describe("UUID o nombre del servicio"),
+    day_start: z.string().optional().describe("Hora inicio HH:MM (def 10:00)"),
+    day_end:   z.string().optional().describe("Hora fin HH:MM (def 20:00)"),
+    slot_minutes: z.number().optional().describe("Tamaño bloque en minutos (def 40)"),
   }),
-  handler: async ({ date, barber_id, service_id }) => {
+  handler: async ({ date, barber_id, service_id, day_start, day_end, slot_minutes }) => {
     const resolvedBarber = await resolveBarberId(barber_id);
     const resolvedService = await resolveServiceId(service_id);
-    let duration = 30;
+
+    const step = slot_minutes && slot_minutes > 0 ? slot_minutes : DEFAULT_SLOT_MIN;
+    let duration = step;
     if (resolvedService) {
       const { data: svc } = await supabase
         .from("services").select("duration_minutes").eq("id", resolvedService).maybeSingle();
       if (svc) duration = svc.duration_minutes;
     }
+
     let bq = supabase.from("barbers").select("id, name").eq("is_active", true);
     if (resolvedBarber) bq = bq.eq("id", resolvedBarber);
     const { data: barbers, error: be } = await bq;
@@ -110,10 +125,12 @@ mcp.tool("get_availability", {
       .eq("appointment_date", date)
       .neq("status", "cancelled");
 
-    const dayStart = 9 * 60, dayEnd = 20 * 60, step = 30;
     const toMin = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
     const fmt = (m: number) =>
       `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+
+    const dayStart = toMin(day_start ?? DEFAULT_DAY_START);
+    const dayEnd   = toMin(day_end   ?? DEFAULT_DAY_END);
 
     const result = (barbers ?? []).map((b: any) => {
       const busy = (appts ?? []).filter((a: any) => a.barber_id === b.id)
@@ -122,11 +139,19 @@ mcp.tool("get_availability", {
       for (let t = dayStart; t + duration <= dayEnd; t += step) {
         if (!busy.some(([s, e]) => t < e && t + duration > s)) slots.push(fmt(t));
       }
-      return { barber_id: b.id, barber_name: b.name, available_slots: slots };
+      return {
+        barber_id: b.id,
+        barber_name: b.name,
+        slot_minutes: step,
+        slot_duration: duration,
+        window: `${fmt(dayStart)}-${fmt(dayEnd)}`,
+        available_slots: slots,
+      };
     });
     return ok(result);
   },
 });
+
 
 mcp.tool("find_or_create_customer", {
   description: "Busca cliente por teléfono o lo crea.",
