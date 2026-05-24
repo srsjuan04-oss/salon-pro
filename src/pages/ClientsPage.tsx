@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -128,7 +129,72 @@ const paymentMethods = [
 
 export default function ClientsPage() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [clients, setClients] = useState<Client[]>(initialClients);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadClients = async () => {
+      setLoading(true);
+      const { data: customers } = await supabase
+        .from("customers")
+        .select("id, name, email, phone, created_at")
+        .order("created_at", { ascending: false });
+
+      const { data: appts } = await supabase
+        .from("appointments")
+        .select("customer_id, appointment_date, status, service_id, services(name, price)");
+
+      const apptsByCustomer = new Map<string, any[]>();
+      (appts ?? []).forEach((a: any) => {
+        const arr = apptsByCustomer.get(a.customer_id) ?? [];
+        arr.push(a);
+        apptsByCustomer.set(a.customer_id, arr);
+      });
+
+      const mapped: Client[] = (customers ?? []).map((c: any) => {
+        const list = apptsByCustomer.get(c.id) ?? [];
+        const valid = list.filter((a) => a.status !== "cancelled");
+        const totalSpent = valid.reduce(
+          (s, a) => s + (Number(a.services?.price) || 0),
+          0
+        );
+        const dates = valid
+          .map((a) => a.appointment_date)
+          .sort()
+          .reverse();
+        const last = dates[0];
+        const tags = Array.from(
+          new Set(valid.map((a: any) => a.services?.name).filter(Boolean))
+        ).slice(0, 3) as string[];
+        return {
+          id: c.id,
+          name: c.name,
+          email: c.email ?? "",
+          phone: c.phone ?? "",
+          avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(
+            c.name
+          )}&background=random`,
+          visits: valid.length,
+          lastVisit: last
+            ? new Date(last).toLocaleDateString("es-ES", {
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+              })
+            : "Sin visitas",
+          totalSpent,
+          vip: valid.length >= 10,
+          tags,
+          balance: 0,
+          identificationNumber: c.id.slice(0, 8),
+        };
+      });
+      setClients(mapped);
+      setLoading(false);
+    };
+    loadClients();
+  }, []);
+
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
