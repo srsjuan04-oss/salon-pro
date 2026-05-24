@@ -35,6 +35,26 @@ const ok = (data: unknown) => ({
   content: [{ type: "text", text: JSON.stringify(data) }],
 });
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function resolveBarberId(value?: string): Promise<string | undefined> {
+  if (!value) return undefined;
+  if (UUID_RE.test(value)) return value;
+  const { data } = await supabase
+    .from("barbers").select("id, name").eq("is_active", true).ilike("name", `%${value}%`).limit(1).maybeSingle();
+  if (!data) throw new Error(`Barbero no encontrado: "${value}"`);
+  return data.id;
+}
+
+async function resolveServiceId(value?: string): Promise<string | undefined> {
+  if (!value) return undefined;
+  if (UUID_RE.test(value)) return value;
+  const { data } = await supabase
+    .from("services").select("id, name").eq("is_active", true).ilike("name", `%${value}%`).limit(1).maybeSingle();
+  if (!data) throw new Error(`Servicio no encontrado: "${value}"`);
+  return data.id;
+}
+
 // ===== Tools =====
 
 mcp.tool("list_services", {
@@ -64,21 +84,23 @@ mcp.tool("list_barbers", {
 });
 
 mcp.tool("get_availability", {
-  description: "Horarios disponibles por barbero para una fecha (YYYY-MM-DD).",
+  description: "Horarios disponibles por barbero para una fecha (YYYY-MM-DD). barber_id y service_id aceptan UUID o nombre.",
   inputSchema: z.object({
-    date: z.string(),
-    barber_id: z.string().optional(),
-    service_id: z.string().optional(),
+    date: z.string().describe("Fecha YYYY-MM-DD"),
+    barber_id: z.string().optional().describe("UUID o nombre del barbero"),
+    service_id: z.string().optional().describe("UUID o nombre del servicio"),
   }),
   handler: async ({ date, barber_id, service_id }) => {
+    const resolvedBarber = await resolveBarberId(barber_id);
+    const resolvedService = await resolveServiceId(service_id);
     let duration = 30;
-    if (service_id) {
+    if (resolvedService) {
       const { data: svc } = await supabase
-        .from("services").select("duration_minutes").eq("id", service_id).maybeSingle();
+        .from("services").select("duration_minutes").eq("id", resolvedService).maybeSingle();
       if (svc) duration = svc.duration_minutes;
     }
     let bq = supabase.from("barbers").select("id, name").eq("is_active", true);
-    if (barber_id) bq = bq.eq("id", barber_id);
+    if (resolvedBarber) bq = bq.eq("id", resolvedBarber);
     const { data: barbers, error: be } = await bq;
     if (be) throw new Error(be.message);
 
@@ -137,8 +159,10 @@ mcp.tool("create_appointment", {
     notes: z.string().optional(),
   }),
   handler: async (args) => {
+    const barberId = await resolveBarberId(args.barber_id);
+    const serviceId = await resolveServiceId(args.service_id);
     const { data: svc, error: se } = await supabase
-      .from("services").select("duration_minutes").eq("id", args.service_id).single();
+      .from("services").select("duration_minutes").eq("id", serviceId!).single();
     if (se) throw new Error(se.message);
     const [h, m] = args.start_time.split(":").map(Number);
     const endMin = h * 60 + m + svc.duration_minutes;
@@ -147,8 +171,8 @@ mcp.tool("create_appointment", {
       .from("appointments")
       .insert({
         customer_id: args.customer_id,
-        barber_id: args.barber_id,
-        service_id: args.service_id,
+        barber_id: barberId,
+        service_id: serviceId,
         appointment_date: args.appointment_date,
         start_time: args.start_time,
         end_time,
@@ -170,6 +194,7 @@ mcp.tool("reschedule_appointment", {
     barber_id: z.string().optional(),
   }),
   handler: async (args) => {
+    const barberId = await resolveBarberId(args.barber_id);
     const { data: appt, error: ae } = await supabase
       .from("appointments").select("service_id").eq("id", args.appointment_id).single();
     if (ae) throw new Error(ae.message);
@@ -183,7 +208,7 @@ mcp.tool("reschedule_appointment", {
       start_time: args.start_time,
       end_time,
     };
-    if (args.barber_id) update.barber_id = args.barber_id;
+    if (barberId) update.barber_id = barberId;
     const { data, error } = await supabase
       .from("appointments").update(update).eq("id", args.appointment_id)
       .select().single();
