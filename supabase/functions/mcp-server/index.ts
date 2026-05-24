@@ -175,9 +175,11 @@ mcp.tool("find_or_create_customer", {
     whatsapp_id: z.string().optional(),
   }),
   handler: async ({ phone, name, email, whatsapp_id }) => {
-    const { data: existing } = await supabase
-      .from("customers").select("*").eq("phone", phone).maybeSingle();
-    if (existing) return ok(existing);
+    const tail = phone.replace(/\D/g, "").slice(-10);
+    const { data: matches } = await supabase
+      .from("customers").select("*")
+      .or(`phone.ilike.%${tail}%,whatsapp_id.ilike.%${tail}%`).limit(1);
+    if (matches && matches[0]) return ok(matches[0]);
     const { data, error } = await supabase
       .from("customers").insert({ phone, name, email, whatsapp_id })
       .select().single();
@@ -208,8 +210,11 @@ mcp.tool("create_appointment", {
       if (!args.customer_phone) {
         throw new Error("Falta customer_id o customer_phone para identificar al cliente.");
       }
-      const { data: existing } = await supabase
-        .from("customers").select("id").eq("phone", args.customer_phone).maybeSingle();
+      const tail = args.customer_phone.replace(/\D/g, "").slice(-10);
+      const { data: matches } = await supabase
+        .from("customers").select("id")
+        .or(`phone.ilike.%${tail}%,whatsapp_id.ilike.%${tail}%`).limit(1);
+      const existing = matches?.[0];
       if (existing) {
         customerId = existing.id;
       } else {
@@ -327,8 +332,13 @@ mcp.tool("list_customer_appointments", {
   handler: async ({ customer_id, phone, include_past }) => {
     let cid = customer_id;
     if (!cid && phone) {
-      const { data: c } = await supabase
-        .from("customers").select("id").eq("phone", phone).maybeSingle();
+      // Búsqueda tolerante por los últimos 10 dígitos (ignora + y prefijo país)
+      const digits = phone.replace(/\D/g, "");
+      const tail = digits.slice(-10);
+      const { data: matches } = await supabase
+        .from("customers").select("id, phone")
+        .or(`phone.ilike.%${tail}%,whatsapp_id.ilike.%${tail}%`);
+      const c = matches?.[0];
       if (!c) return ok([]);
       cid = c.id;
     }
