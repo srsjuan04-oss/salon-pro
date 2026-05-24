@@ -216,7 +216,89 @@ export default function AuthPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {showForgot ? (
+          {showOtp ? (
+            <div className="space-y-4">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="px-0"
+                onClick={() => { setShowOtp(false); setOtpSent(false); setOtpCode(""); setError(null); setSuccess(null); }}
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Volver
+              </Button>
+              {error && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+              {success && (
+                <Alert className="border-green-500 bg-green-50 text-green-700">
+                  <AlertDescription>{success}</AlertDescription>
+                </Alert>
+              )}
+              {!otpSent ? (
+                <form onSubmit={handleSendOtp} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="otp-email">Email</Label>
+                    <Input
+                      id="otp-email"
+                      type="email"
+                      placeholder="tu@email.com"
+                      value={otpEmail}
+                      onChange={(e) => setOtpEmail(e.target.value)}
+                      required
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Te enviaremos un código de 6 dígitos para iniciar sesión.
+                    </p>
+                  </div>
+                  <Button type="submit" className="w-full" disabled={isLoading}>
+                    {isLoading ? (
+                      <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Enviando...</>
+                    ) : (
+                      "Enviar código"
+                    )}
+                  </Button>
+                </form>
+              ) : (
+                <form onSubmit={handleVerifyOtp} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Código de 6 dígitos</Label>
+                    <div className="flex justify-center">
+                      <InputOTP maxLength={6} value={otpCode} onChange={setOtpCode}>
+                        <InputOTPGroup>
+                          <InputOTPSlot index={0} />
+                          <InputOTPSlot index={1} />
+                          <InputOTPSlot index={2} />
+                          <InputOTPSlot index={3} />
+                          <InputOTPSlot index={4} />
+                          <InputOTPSlot index={5} />
+                        </InputOTPGroup>
+                      </InputOTP>
+                    </div>
+                  </div>
+                  <Button type="submit" className="w-full" disabled={isLoading || otpCode.length !== 6}>
+                    {isLoading ? (
+                      <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Verificando...</>
+                    ) : (
+                      "Verificar e iniciar sesión"
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="w-full text-sm"
+                    onClick={() => { setOtpSent(false); setOtpCode(""); setError(null); setSuccess(null); }}
+                  >
+                    Enviar a otro correo
+                  </Button>
+                </form>
+              )}
+            </div>
+          ) : showForgot ? (
             <div className="space-y-4">
               <Button
                 type="button"
