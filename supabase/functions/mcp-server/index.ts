@@ -175,9 +175,11 @@ mcp.tool("find_or_create_customer", {
     whatsapp_id: z.string().optional(),
   }),
   handler: async ({ phone, name, email, whatsapp_id }) => {
-    const { data: existing } = await supabase
-      .from("customers").select("*").eq("phone", phone).maybeSingle();
-    if (existing) return ok(existing);
+    const tail = phone.replace(/\D/g, "").slice(-10);
+    const { data: matches } = await supabase
+      .from("customers").select("*")
+      .or(`phone.ilike.%${tail}%,whatsapp_id.ilike.%${tail}%`).limit(1);
+    if (matches && matches[0]) return ok(matches[0]);
     const { data, error } = await supabase
       .from("customers").insert({ phone, name, email, whatsapp_id })
       .select().single();
