@@ -560,7 +560,7 @@ export default function CalendarPage() {
                           className="gap-2 bg-green-600 hover:bg-green-700 text-white"
                           onClick={() =>
                             updateAppointment.mutate(
-                              { id: appt.id, updates: { status: "completed" } },
+                              { id: appt.id, status: "completed" },
                               {
                                 onSuccess: () => toast.success("Cita cobrada y registrada en ventas"),
                               }
