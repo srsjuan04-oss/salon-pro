@@ -417,7 +417,7 @@ export default function SalesPage() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Ticket Promedio</p>
-                <p className="text-2xl font-bold">${Math.round(totalSales / sales.length).toLocaleString()}</p>
+                <p className="text-2xl font-bold">${sales.length > 0 ? Math.round(totalSales / sales.length).toLocaleString() : 0}</p>
                 <p className="text-xs text-muted-foreground">{sales.length} servicios</p>
               </div>
             </div>
