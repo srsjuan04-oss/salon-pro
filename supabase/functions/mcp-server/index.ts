@@ -83,30 +83,43 @@ mcp.tool("list_barbers", {
   },
 });
 
-// Defaults configurables: jornada 10:00-20:00 con bloques de 40 minutos.
+// Defaults si no hay fila en schedule_settings.
 const DEFAULT_DAY_START = "10:00";
 const DEFAULT_DAY_END   = "20:00";
 const DEFAULT_SLOT_MIN  = 40;
 
+async function loadScheduleSettings() {
+  const { data } = await supabase
+    .from("schedule_settings")
+    .select("day_start, day_end, slot_minutes")
+    .limit(1).maybeSingle();
+  return {
+    day_start: (data?.day_start ?? DEFAULT_DAY_START).slice(0, 5),
+    day_end:   (data?.day_end   ?? DEFAULT_DAY_END).slice(0, 5),
+    slot_minutes: data?.slot_minutes ?? DEFAULT_SLOT_MIN,
+  };
+}
+
 mcp.tool("get_availability", {
   description:
     "Horarios disponibles por barbero para una fecha (YYYY-MM-DD). " +
-    "Por defecto jornada 10:00-20:00 con bloques de 40 min. " +
-    "Se puede sobreescribir con day_start, day_end y slot_minutes. " +
+    "Usa la configuración guardada en schedule_settings (jornada y bloque). " +
+    "Se puede sobreescribir por llamada con day_start, day_end y slot_minutes. " +
     "barber_id y service_id aceptan UUID o nombre.",
   inputSchema: z.object({
     date: z.string().describe("Fecha YYYY-MM-DD"),
     barber_id: z.string().optional().describe("UUID o nombre del barbero"),
     service_id: z.string().optional().describe("UUID o nombre del servicio"),
-    day_start: z.string().optional().describe("Hora inicio HH:MM (def 10:00)"),
-    day_end:   z.string().optional().describe("Hora fin HH:MM (def 20:00)"),
-    slot_minutes: z.number().optional().describe("Tamaño bloque en minutos (def 40)"),
+    day_start: z.string().optional().describe("Override hora inicio HH:MM"),
+    day_end:   z.string().optional().describe("Override hora fin HH:MM"),
+    slot_minutes: z.number().optional().describe("Override tamaño bloque en minutos"),
   }),
   handler: async ({ date, barber_id, service_id, day_start, day_end, slot_minutes }) => {
     const resolvedBarber = await resolveBarberId(barber_id);
     const resolvedService = await resolveServiceId(service_id);
+    const cfg = await loadScheduleSettings();
 
-    const step = slot_minutes && slot_minutes > 0 ? slot_minutes : DEFAULT_SLOT_MIN;
+    const step = slot_minutes && slot_minutes > 0 ? slot_minutes : cfg.slot_minutes;
     let duration = step;
     if (resolvedService) {
       const { data: svc } = await supabase
@@ -129,8 +142,8 @@ mcp.tool("get_availability", {
     const fmt = (m: number) =>
       `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 
-    const dayStart = toMin(day_start ?? DEFAULT_DAY_START);
-    const dayEnd   = toMin(day_end   ?? DEFAULT_DAY_END);
+    const dayStart = toMin(day_start ?? cfg.day_start);
+    const dayEnd   = toMin(day_end   ?? cfg.day_end);
 
     const result = (barbers ?? []).map((b: any) => {
       const busy = (appts ?? []).filter((a: any) => a.barber_id === b.id)

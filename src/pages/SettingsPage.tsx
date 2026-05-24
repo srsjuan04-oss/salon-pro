@@ -4,13 +4,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  Building2, 
-  Bell, 
-  Calendar, 
+import { ScheduleSettingsCard } from "@/components/settings/ScheduleSettingsCard";
+import {
+  Building2,
+  Bell,
+  Calendar,
   CreditCard,
-  Palette,
-  Shield,
   Save
 } from "lucide-react";
 
@@ -127,9 +126,11 @@ export default function SettingsPage() {
           </TabsContent>
 
           <TabsContent value="calendar" className="space-y-6">
+            <ScheduleSettingsCard />
+
             <div className="bg-card rounded-2xl border shadow-soft p-6 space-y-6">
               <h3 className="text-lg font-semibold">Integraciones de Calendario</h3>
-              
+
               <div className="space-y-4">
                 <div className="flex items-center justify-between p-4 rounded-xl border border-border">
                   <div className="flex items-center gap-3">
@@ -141,7 +142,7 @@ export default function SettingsPage() {
                   </div>
                   <Button variant="outline">Conectar</Button>
                 </div>
-                
+
                 <div className="flex items-center justify-between p-4 rounded-xl border border-border">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded bg-foreground flex items-center justify-center">
@@ -155,22 +156,9 @@ export default function SettingsPage() {
                   <Button variant="outline">Conectar</Button>
                 </div>
               </div>
-
-              <div className="pt-4 border-t border-border">
-                <h4 className="font-medium mb-4">Configuración de Citas</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Duración mínima (minutos)</Label>
-                    <Input type="number" defaultValue="30" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Tiempo entre citas (minutos)</Label>
-                    <Input type="number" defaultValue="15" />
-                  </div>
-                </div>
-              </div>
             </div>
           </TabsContent>
+
 
           <TabsContent value="billing" className="space-y-6">
             <div className="bg-card rounded-2xl border shadow-soft p-6 space-y-6">

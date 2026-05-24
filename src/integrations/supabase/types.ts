@@ -268,6 +268,36 @@ export type Database = {
         }
         Relationships: []
       }
+      schedule_settings: {
+        Row: {
+          created_at: string
+          day_end: string
+          day_start: string
+          id: string
+          singleton: boolean
+          slot_minutes: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          day_end?: string
+          day_start?: string
+          id?: string
+          singleton?: boolean
+          slot_minutes?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          day_end?: string
+          day_start?: string
+          id?: string
+          singleton?: boolean
+          slot_minutes?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       sent_notifications: {
         Row: {
           appointment_id: string
