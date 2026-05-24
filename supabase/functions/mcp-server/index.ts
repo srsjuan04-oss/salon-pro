@@ -194,6 +194,7 @@ mcp.tool("reschedule_appointment", {
     barber_id: z.string().optional(),
   }),
   handler: async (args) => {
+    const barberId = await resolveBarberId(args.barber_id);
     const { data: appt, error: ae } = await supabase
       .from("appointments").select("service_id").eq("id", args.appointment_id).single();
     if (ae) throw new Error(ae.message);
@@ -207,7 +208,7 @@ mcp.tool("reschedule_appointment", {
       start_time: args.start_time,
       end_time,
     };
-    if (args.barber_id) update.barber_id = args.barber_id;
+    if (barberId) update.barber_id = barberId;
     const { data, error } = await supabase
       .from("appointments").update(update).eq("id", args.appointment_id)
       .select().single();
