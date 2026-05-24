@@ -344,7 +344,9 @@ export default function AuthPage() {
               </p>
             </TabsContent>
           </Tabs>
+          )}
         </CardContent>
+
       </Card>
     </div>
   );
