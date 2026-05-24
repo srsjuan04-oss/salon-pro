@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -128,7 +129,72 @@ const paymentMethods = [
 
 export default function ClientsPage() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [clients, setClients] = useState<Client[]>(initialClients);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadClients = async () => {
+      setLoading(true);
+      const { data: customers } = await supabase
+        .from("customers")
+        .select("id, name, email, phone, created_at")
+        .order("created_at", { ascending: false });
+
+      const { data: appts } = await supabase
+        .from("appointments")
+        .select("customer_id, appointment_date, status, service_id, services(name, price)");
+
+      const apptsByCustomer = new Map<string, any[]>();
+      (appts ?? []).forEach((a: any) => {
+        const arr = apptsByCustomer.get(a.customer_id) ?? [];
+        arr.push(a);
+        apptsByCustomer.set(a.customer_id, arr);
+      });
+
+      const mapped: Client[] = (customers ?? []).map((c: any) => {
+        const list = apptsByCustomer.get(c.id) ?? [];
+        const valid = list.filter((a) => a.status !== "cancelled");
+        const totalSpent = valid.reduce(
+          (s, a) => s + (Number(a.services?.price) || 0),
+          0
+        );
+        const dates = valid
+          .map((a) => a.appointment_date)
+          .sort()
+          .reverse();
+        const last = dates[0];
+        const tags = Array.from(
+          new Set(valid.map((a: any) => a.services?.name).filter(Boolean))
+        ).slice(0, 3) as string[];
+        return {
+          id: c.id,
+          name: c.name,
+          email: c.email ?? "",
+          phone: c.phone ?? "",
+          avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(
+            c.name
+          )}&background=random`,
+          visits: valid.length,
+          lastVisit: last
+            ? new Date(last).toLocaleDateString("es-ES", {
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+              })
+            : "Sin visitas",
+          totalSpent,
+          vip: valid.length >= 10,
+          tags,
+          balance: 0,
+          identificationNumber: c.id.slice(0, 8),
+        };
+      });
+      setClients(mapped);
+      setLoading(false);
+    };
+    loadClients();
+  }, []);
+
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
@@ -191,27 +257,40 @@ export default function ClientsPage() {
     setHistoryDialogOpen(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const { data, error } = await supabase
+      .from("customers")
+      .insert({
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+      })
+      .select()
+      .single();
+    if (error) {
+      console.error("Error creando cliente:", error);
+      return;
+    }
     const newClient: Client = {
-      id: String(clients.length + 1),
-      name: formData.name,
-      email: formData.email,
-      phone: formData.phone,
-      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.name)}&background=random`,
+      id: data.id,
+      name: data.name,
+      email: data.email ?? "",
+      phone: data.phone ?? "",
+      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(data.name)}&background=random`,
       visits: 0,
-      lastVisit: "Nuevo",
+      lastVisit: "Sin visitas",
       totalSpent: 0,
       vip: formData.vip,
       tags: formData.preferredServices,
       balance: 0,
-      identificationNumber: formData.identificationNumber,
+      identificationNumber: data.id.slice(0, 8),
     };
-    setClients([...clients, newClient]);
-    console.log("Nuevo cliente:", newClient);
+    setClients([newClient, ...clients]);
     setIsDialogOpen(false);
     setFormData({ name: "", email: "", phone: "", vip: false, preferredServices: [], identificationNumber: "" });
   };
+
 
   const filteredClients = clients.filter(client =>
     client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
