@@ -7,8 +7,6 @@ import {
   UserCircle, 
   DollarSign, 
   Receipt,
-  MessageCircle,
-  Zap,
   Settings,
   Scissors,
   ChevronLeft,
@@ -26,10 +24,9 @@ const menuItems = [
   { icon: UserCircle, label: "Staff", path: "/staff" },
   { icon: DollarSign, label: "Ventas", path: "/sales" },
   { icon: Receipt, label: "Gastos", path: "/expenses" },
-  { icon: MessageCircle, label: "WhatsApp", path: "/whatsapp" },
-  { icon: Zap, label: "Automatización", path: "/automation" },
   { icon: Settings, label: "Configuración", path: "/settings", adminOnly: true },
 ];
+
 
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
