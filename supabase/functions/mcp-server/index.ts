@@ -83,12 +83,22 @@ mcp.tool("list_barbers", {
   },
 });
 
-// Defaults configurables: jornada 10:00-20:00 con bloques de 40 minutos.
+// Defaults si no hay fila en schedule_settings.
 const DEFAULT_DAY_START = "10:00";
 const DEFAULT_DAY_END   = "20:00";
 const DEFAULT_SLOT_MIN  = 40;
 
-mcp.tool("get_availability", {
+async function loadScheduleSettings() {
+  const { data } = await supabase
+    .from("schedule_settings")
+    .select("day_start, day_end, slot_minutes")
+    .limit(1).maybeSingle();
+  return {
+    day_start: (data?.day_start ?? DEFAULT_DAY_START).slice(0, 5),
+    day_end:   (data?.day_end   ?? DEFAULT_DAY_END).slice(0, 5),
+    slot_minutes: data?.slot_minutes ?? DEFAULT_SLOT_MIN,
+  };
+}
   description:
     "Horarios disponibles por barbero para una fecha (YYYY-MM-DD). " +
     "Por defecto jornada 10:00-20:00 con bloques de 40 min. " +
