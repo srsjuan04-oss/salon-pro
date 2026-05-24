@@ -1,14 +1,16 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Scissors, Loader2, AlertCircle } from "lucide-react";
+import { Scissors, Loader2, AlertCircle, ArrowLeft } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { z } from "zod";
+
 
 const emailSchema = z.string().email("Email inválido");
 const passwordSchema = z.string().min(6, "La contraseña debe tener al menos 6 caracteres");
@@ -31,6 +33,36 @@ export default function AuthPage() {
   const [registerEmail, setRegisterEmail] = useState("");
   const [registerPassword, setRegisterPassword] = useState("");
   const [registerConfirmPassword, setRegisterConfirmPassword] = useState("");
+
+  // Forgot password
+  const [showForgot, setShowForgot] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+
+  const handleForgot = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+    try {
+      emailSchema.parse(forgotEmail);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        setError(err.errors[0].message);
+        return;
+      }
+    }
+    setIsLoading(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    setIsLoading(false);
+    if (error) {
+      setError(error.message);
+    } else {
+      setSuccess("Te enviamos un enlace para restablecer tu contraseña. Revisa tu correo.");
+      setForgotEmail("");
+    }
+  };
+
 
   useEffect(() => {
     if (isAuthenticated && !authLoading) {
@@ -131,7 +163,56 @@ export default function AuthPage() {
           </div>
         </CardHeader>
         <CardContent>
+          {showForgot ? (
+            <div className="space-y-4">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="px-0"
+                onClick={() => { setShowForgot(false); setError(null); setSuccess(null); }}
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Volver
+              </Button>
+              <form onSubmit={handleForgot} className="space-y-4">
+                {error && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
+                )}
+                {success && (
+                  <Alert className="border-green-500 bg-green-50 text-green-700">
+                    <AlertDescription>{success}</AlertDescription>
+                  </Alert>
+                )}
+                <div className="space-y-2">
+                  <Label htmlFor="forgot-email">Email</Label>
+                  <Input
+                    id="forgot-email"
+                    type="email"
+                    placeholder="tu@email.com"
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    required
+                  />
+                </div>
+                <Button type="submit" className="w-full" disabled={isLoading}>
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Enviando...
+                    </>
+                  ) : (
+                    "Enviar enlace de recuperación"
+                  )}
+                </Button>
+              </form>
+            </div>
+          ) : (
           <Tabs defaultValue="login" className="w-full">
+
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="login">Iniciar Sesión</TabsTrigger>
               <TabsTrigger value="register">Registrarse</TabsTrigger>
@@ -181,7 +262,16 @@ export default function AuthPage() {
                   )}
                 </Button>
               </form>
+              <Button
+                type="button"
+                variant="link"
+                className="w-full text-sm"
+                onClick={() => { setShowForgot(true); setError(null); setSuccess(null); }}
+              >
+                ¿Olvidaste tu contraseña?
+              </Button>
             </TabsContent>
+
             
             <TabsContent value="register" className="space-y-4 mt-4">
               <form onSubmit={handleRegister} className="space-y-4">
@@ -263,7 +353,9 @@ export default function AuthPage() {
               </p>
             </TabsContent>
           </Tabs>
+          )}
         </CardContent>
+
       </Card>
     </div>
   );

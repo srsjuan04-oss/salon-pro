@@ -59,13 +59,14 @@ export function useUpdateFlow() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, ...updates }: Partial<NotificationFlow> & { id: string }) => {
+    mutationFn: async ({ id, template: _t, ...updates }: Partial<NotificationFlow> & { id: string }) => {
       const { data, error } = await supabase
         .from("notification_flows")
         .update(updates)
         .eq("id", id)
         .select()
         .single();
+
 
       if (error) throw error;
       return data;
