@@ -330,14 +330,17 @@ mcp.tool("list_customer_appointments", {
     include_past: z.boolean().optional(),
   }),
   handler: async ({ customer_id, phone, include_past }) => {
+    console.log("[list_customer_appointments] args:", { customer_id, phone, include_past });
     let cid = customer_id;
     if (!cid && phone) {
       // Búsqueda tolerante por los últimos 10 dígitos (ignora + y prefijo país)
       const digits = phone.replace(/\D/g, "");
       const tail = digits.slice(-10);
-      const { data: matches } = await supabase
+      console.log("[list_customer_appointments] searching tail:", tail);
+      const { data: matches, error: mErr } = await supabase
         .from("customers").select("id, phone")
         .or(`phone.ilike.%${tail}%,whatsapp_id.ilike.%${tail}%`);
+      console.log("[list_customer_appointments] matches:", matches, "err:", mErr);
       const c = matches?.[0];
       if (!c) return ok([]);
       cid = c.id;
