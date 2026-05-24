@@ -124,8 +124,8 @@ export default function CalendarPage() {
 
   const getAppointmentStyle = (startTime: string, durationMinutes: number) => {
     const [hour, minute] = startTime.split(":").map(Number);
-    const top = (hour - 8) * 80 + (minute / 60) * 80;
-    const height = (durationMinutes / 60) * 80 - 4;
+    const top = (hour - startHour) * HOUR_PX + (minute / 60) * HOUR_PX;
+    const height = (durationMinutes / 60) * HOUR_PX - 4;
     return { top: `${top}px`, height: `${height}px` };
   };
 
