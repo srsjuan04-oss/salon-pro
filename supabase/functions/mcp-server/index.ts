@@ -84,11 +84,11 @@ mcp.tool("list_barbers", {
 });
 
 mcp.tool("get_availability", {
-  description: "Horarios disponibles por barbero para una fecha (YYYY-MM-DD).",
+  description: "Horarios disponibles por barbero para una fecha (YYYY-MM-DD). barber_id y service_id aceptan UUID o nombre.",
   inputSchema: z.object({
-    date: z.string(),
-    barber_id: z.string().optional(),
-    service_id: z.string().optional(),
+    date: z.string().describe("Fecha YYYY-MM-DD"),
+    barber_id: z.string().optional().describe("UUID o nombre del barbero"),
+    service_id: z.string().optional().describe("UUID o nombre del servicio"),
   }),
   handler: async ({ date, barber_id, service_id }) => {
     const resolvedBarber = await resolveBarberId(barber_id);
