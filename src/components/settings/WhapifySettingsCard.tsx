@@ -91,13 +91,14 @@ export function WhapifySettingsCard() {
   });
 
   const updateReminder = useMutation({
-    mutationFn: async ({ id, patch }: { id: string; patch: Record<string, unknown> }) => {
+    mutationFn: async ({ id, patch }: { id: string; patch: { active?: boolean; whapify_flow_id?: string | null } }) => {
       const { error } = await supabase.from("reminder_settings").update(patch).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["reminder-settings"] }),
     onError: (e: any) => toast.error(e.message),
   });
+
 
   const hasToken = Boolean(settings?.whapify_token);
   const isActive = Boolean(settings?.is_active);
