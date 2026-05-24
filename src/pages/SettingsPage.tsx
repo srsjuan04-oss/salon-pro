@@ -5,11 +5,13 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScheduleSettingsCard } from "@/components/settings/ScheduleSettingsCard";
+import { ServicesManager } from "@/components/settings/ServicesManager";
 import {
   Building2,
   Bell,
   Calendar,
   CreditCard,
+  Scissors,
   Save
 } from "lucide-react";
 
@@ -39,11 +41,19 @@ export default function SettingsPage() {
               <Calendar className="w-4 h-4" />
               Calendario
             </TabsTrigger>
+            <TabsTrigger value="services" className="gap-2">
+              <Scissors className="w-4 h-4" />
+              Servicios
+            </TabsTrigger>
             <TabsTrigger value="billing" className="gap-2">
               <CreditCard className="w-4 h-4" />
               Facturación
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="services" className="space-y-6">
+            <ServicesManager />
+          </TabsContent>
 
           <TabsContent value="general" className="space-y-6">
             <div className="bg-card rounded-2xl border shadow-soft p-6 space-y-6">
