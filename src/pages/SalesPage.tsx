@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -120,7 +121,7 @@ const generateSalesData = (): Sale[] => {
   return salesData.sort((a, b) => b.date.localeCompare(a.date) || b.time.localeCompare(a.time));
 };
 
-const initialSales: Sale[] = generateSalesData();
+const initialSales: Sale[] = [];
 
 const paymentMethods = ["Efectivo", "Tarjeta", "Transferencia"];
 
@@ -135,7 +136,7 @@ const dateFilterLabels: Record<DateFilter, string> = {
 };
 
 export default function SalesPage() {
-  const [sales, setSales] = useState(initialSales);
+  const [sales, setSales] = useState<Sale[]>(initialSales);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("all");
   const [dateFilter, setDateFilter] = useState<DateFilter>("30days");
@@ -150,7 +151,33 @@ export default function SalesPage() {
     paymentMethod: "",
   });
 
-  const today = new Date("2026-01-15");
+  const today = new Date();
+
+  useEffect(() => {
+    const load = async () => {
+      const { data } = await supabase
+        .from("appointments")
+        .select(
+          "id, appointment_date, start_time, status, customers(name), services(name, price), barbers(name)"
+        )
+        .neq("status", "cancelled")
+        .order("appointment_date", { ascending: false });
+      const mapped: Sale[] = (data ?? []).map((a: any) => ({
+        id: a.id,
+        client: a.customers?.name ?? "Sin cliente",
+        service: a.services?.name ?? "Servicio",
+        amount: Number(a.services?.price) || 0,
+        stylist: a.barbers?.name ?? "—",
+        date: a.appointment_date,
+        time: (a.start_time ?? "").slice(0, 5),
+        method: a.status === "completed" ? "Efectivo" : "-",
+        status: a.status === "completed" ? "paid" : "pending",
+      }));
+      setSales(mapped);
+    };
+    load();
+  }, []);
+
 
   // Filtrar ventas por fecha
   const dateFilteredSales = useMemo(() => {
