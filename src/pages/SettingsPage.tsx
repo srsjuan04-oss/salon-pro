@@ -6,14 +6,17 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScheduleSettingsCard } from "@/components/settings/ScheduleSettingsCard";
 import { ServicesManager } from "@/components/settings/ServicesManager";
+import { WhapifySettingsCard } from "@/components/settings/WhapifySettingsCard";
 import {
   Building2,
   Bell,
   Calendar,
   CreditCard,
   Scissors,
+  MessageSquare,
   Save
 } from "lucide-react";
+
 
 export default function SettingsPage() {
   return (
@@ -45,11 +48,20 @@ export default function SettingsPage() {
               <Scissors className="w-4 h-4" />
               Servicios
             </TabsTrigger>
+            <TabsTrigger value="whapify" className="gap-2">
+              <MessageSquare className="w-4 h-4" />
+              Whapify
+            </TabsTrigger>
             <TabsTrigger value="billing" className="gap-2">
               <CreditCard className="w-4 h-4" />
               Facturación
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="whapify" className="space-y-6">
+            <WhapifySettingsCard />
+          </TabsContent>
+
 
           <TabsContent value="services" className="space-y-6">
             <ServicesManager />
