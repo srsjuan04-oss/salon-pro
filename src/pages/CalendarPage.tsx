@@ -37,8 +37,9 @@ import {
 } from "@/hooks/useAppointments";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
+import { useScheduleSettings } from "@/hooks/useScheduleSettings";
 
-const hours = Array.from({ length: 12 }, (_, i) => i + 8);
+const HOUR_PX = 80;
 
 const staffColors = [
   "bg-primary/20 border-primary/40 text-primary",
