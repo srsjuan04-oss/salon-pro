@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Scissors, Loader2, AlertCircle, ArrowLeft } from "lucide-react";
+import { Scissors, Loader2, AlertCircle, ArrowLeft, Mail } from "lucide-react";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { z } from "zod";
 
@@ -37,6 +38,58 @@ export default function AuthPage() {
   // Forgot password
   const [showForgot, setShowForgot] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
+
+  // OTP login (código por correo)
+  const [showOtp, setShowOtp] = useState(false);
+  const [otpEmail, setOtpEmail] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+
+  const handleSendOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+    try {
+      emailSchema.parse(otpEmail);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        setError(err.errors[0].message);
+        return;
+      }
+    }
+    setIsLoading(true);
+    const { error } = await supabase.auth.signInWithOtp({
+      email: otpEmail,
+      options: { shouldCreateUser: false },
+    });
+    setIsLoading(false);
+    if (error) {
+      setError(error.message);
+    } else {
+      setOtpSent(true);
+      setSuccess("Te enviamos un código de 6 dígitos a tu correo.");
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (otpCode.length !== 6) {
+      setError("Ingresa el código de 6 dígitos.");
+      return;
+    }
+    setIsLoading(true);
+    const { error } = await supabase.auth.verifyOtp({
+      email: otpEmail,
+      token: otpCode,
+      type: "email",
+    });
+    setIsLoading(false);
+    if (error) {
+      setError("Código inválido o expirado.");
+    }
+  };
+
 
   const handleForgot = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -163,7 +216,89 @@ export default function AuthPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {showForgot ? (
+          {showOtp ? (
+            <div className="space-y-4">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="px-0"
+                onClick={() => { setShowOtp(false); setOtpSent(false); setOtpCode(""); setError(null); setSuccess(null); }}
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Volver
+              </Button>
+              {error && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+              {success && (
+                <Alert className="border-green-500 bg-green-50 text-green-700">
+                  <AlertDescription>{success}</AlertDescription>
+                </Alert>
+              )}
+              {!otpSent ? (
+                <form onSubmit={handleSendOtp} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="otp-email">Email</Label>
+                    <Input
+                      id="otp-email"
+                      type="email"
+                      placeholder="tu@email.com"
+                      value={otpEmail}
+                      onChange={(e) => setOtpEmail(e.target.value)}
+                      required
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Te enviaremos un código de 6 dígitos para iniciar sesión.
+                    </p>
+                  </div>
+                  <Button type="submit" className="w-full" disabled={isLoading}>
+                    {isLoading ? (
+                      <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Enviando...</>
+                    ) : (
+                      "Enviar código"
+                    )}
+                  </Button>
+                </form>
+              ) : (
+                <form onSubmit={handleVerifyOtp} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Código de 6 dígitos</Label>
+                    <div className="flex justify-center">
+                      <InputOTP maxLength={6} value={otpCode} onChange={setOtpCode}>
+                        <InputOTPGroup>
+                          <InputOTPSlot index={0} />
+                          <InputOTPSlot index={1} />
+                          <InputOTPSlot index={2} />
+                          <InputOTPSlot index={3} />
+                          <InputOTPSlot index={4} />
+                          <InputOTPSlot index={5} />
+                        </InputOTPGroup>
+                      </InputOTP>
+                    </div>
+                  </div>
+                  <Button type="submit" className="w-full" disabled={isLoading || otpCode.length !== 6}>
+                    {isLoading ? (
+                      <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Verificando...</>
+                    ) : (
+                      "Verificar e iniciar sesión"
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="w-full text-sm"
+                    onClick={() => { setOtpSent(false); setOtpCode(""); setError(null); setSuccess(null); }}
+                  >
+                    Enviar a otro correo
+                  </Button>
+                </form>
+              )}
+            </div>
+          ) : showForgot ? (
             <div className="space-y-4">
               <Button
                 type="button"
@@ -262,6 +397,15 @@ export default function AuthPage() {
                   )}
                 </Button>
               </form>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={() => { setShowOtp(true); setError(null); setSuccess(null); setOtpEmail(loginEmail); }}
+              >
+                <Mail className="mr-2 h-4 w-4" />
+                Iniciar con código por correo
+              </Button>
               <Button
                 type="button"
                 variant="link"
