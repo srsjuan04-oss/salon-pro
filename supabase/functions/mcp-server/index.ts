@@ -159,8 +159,10 @@ mcp.tool("create_appointment", {
     notes: z.string().optional(),
   }),
   handler: async (args) => {
+    const barberId = await resolveBarberId(args.barber_id);
+    const serviceId = await resolveServiceId(args.service_id);
     const { data: svc, error: se } = await supabase
-      .from("services").select("duration_minutes").eq("id", args.service_id).single();
+      .from("services").select("duration_minutes").eq("id", serviceId!).single();
     if (se) throw new Error(se.message);
     const [h, m] = args.start_time.split(":").map(Number);
     const endMin = h * 60 + m + svc.duration_minutes;
@@ -169,8 +171,8 @@ mcp.tool("create_appointment", {
       .from("appointments")
       .insert({
         customer_id: args.customer_id,
-        barber_id: args.barber_id,
-        service_id: args.service_id,
+        barber_id: barberId,
+        service_id: serviceId,
         appointment_date: args.appointment_date,
         start_time: args.start_time,
         end_time,
