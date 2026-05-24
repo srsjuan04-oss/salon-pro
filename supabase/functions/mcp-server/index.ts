@@ -210,8 +210,11 @@ mcp.tool("create_appointment", {
       if (!args.customer_phone) {
         throw new Error("Falta customer_id o customer_phone para identificar al cliente.");
       }
-      const { data: existing } = await supabase
-        .from("customers").select("id").eq("phone", args.customer_phone).maybeSingle();
+      const tail = args.customer_phone.replace(/\D/g, "").slice(-10);
+      const { data: matches } = await supabase
+        .from("customers").select("id")
+        .or(`phone.ilike.%${tail}%,whatsapp_id.ilike.%${tail}%`).limit(1);
+      const existing = matches?.[0];
       if (existing) {
         customerId = existing.id;
       } else {
