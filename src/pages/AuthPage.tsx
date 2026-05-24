@@ -399,6 +399,15 @@ export default function AuthPage() {
               </form>
               <Button
                 type="button"
+                variant="outline"
+                className="w-full"
+                onClick={() => { setShowOtp(true); setError(null); setSuccess(null); setOtpEmail(loginEmail); }}
+              >
+                <Mail className="mr-2 h-4 w-4" />
+                Iniciar con código por correo
+              </Button>
+              <Button
+                type="button"
                 variant="link"
                 className="w-full text-sm"
                 onClick={() => { setShowForgot(true); setError(null); setSuccess(null); }}
