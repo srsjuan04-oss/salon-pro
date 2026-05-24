@@ -65,6 +65,26 @@ export default function CalendarPage() {
   const { data: barbers, isLoading: loadingBarbers } = useBarbers();
   const { data: services } = useServices();
   const { data: customers } = useCustomers();
+  const { data: schedule } = useScheduleSettings();
+
+  const startHour = schedule ? parseInt(schedule.day_start.split(":")[0], 10) : 10;
+  const endHour = schedule ? parseInt(schedule.day_end.split(":")[0], 10) : 20;
+  const slotMinutes = schedule?.slot_minutes ?? 40;
+  const hours = useMemo(
+    () => Array.from({ length: Math.max(1, endHour - startHour) }, (_, i) => i + startHour),
+    [startHour, endHour]
+  );
+  const timeSlots = useMemo(() => {
+    const out: string[] = [];
+    const startMin = startHour * 60;
+    const endMin = endHour * 60;
+    for (let m = startMin; m + slotMinutes <= endMin; m += slotMinutes) {
+      out.push(
+        `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`
+      );
+    }
+    return out;
+  }, [startHour, endHour, slotMinutes]);
   
   const createAppointment = useCreateAppointment();
   const updateAppointment = useUpdateAppointment();
