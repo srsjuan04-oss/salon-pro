@@ -37,8 +37,9 @@ import {
 } from "@/hooks/useAppointments";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
+import { useScheduleSettings } from "@/hooks/useScheduleSettings";
 
-const hours = Array.from({ length: 12 }, (_, i) => i + 8);
+const HOUR_PX = 80;
 
 const staffColors = [
   "bg-primary/20 border-primary/40 text-primary",
@@ -64,6 +65,26 @@ export default function CalendarPage() {
   const { data: barbers, isLoading: loadingBarbers } = useBarbers();
   const { data: services } = useServices();
   const { data: customers } = useCustomers();
+  const { data: schedule } = useScheduleSettings();
+
+  const startHour = schedule ? parseInt(schedule.day_start.split(":")[0], 10) : 10;
+  const endHour = schedule ? parseInt(schedule.day_end.split(":")[0], 10) : 20;
+  const slotMinutes = schedule?.slot_minutes ?? 40;
+  const hours = useMemo(
+    () => Array.from({ length: Math.max(1, endHour - startHour) }, (_, i) => i + startHour),
+    [startHour, endHour]
+  );
+  const timeSlots = useMemo(() => {
+    const out: string[] = [];
+    const startMin = startHour * 60;
+    const endMin = endHour * 60;
+    for (let m = startMin; m + slotMinutes <= endMin; m += slotMinutes) {
+      out.push(
+        `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`
+      );
+    }
+    return out;
+  }, [startHour, endHour, slotMinutes]);
   
   const createAppointment = useCreateAppointment();
   const updateAppointment = useUpdateAppointment();
@@ -103,8 +124,8 @@ export default function CalendarPage() {
 
   const getAppointmentStyle = (startTime: string, durationMinutes: number) => {
     const [hour, minute] = startTime.split(":").map(Number);
-    const top = (hour - 8) * 80 + (minute / 60) * 80;
-    const height = (durationMinutes / 60) * 80 - 4;
+    const top = (hour - startHour) * HOUR_PX + (minute / 60) * HOUR_PX;
+    const height = (durationMinutes / 60) * HOUR_PX - 4;
     return { top: `${top}px`, height: `${height}px` };
   };
 
@@ -565,16 +586,11 @@ export default function CalendarPage() {
                   <SelectValue placeholder="Seleccionar hora" />
                 </SelectTrigger>
                 <SelectContent>
-                  {hours.flatMap((hour) =>
-                    ["00", "30"].map((min) => (
-                      <SelectItem
-                        key={`${hour}:${min}`}
-                        value={`${hour.toString().padStart(2, "0")}:${min}`}
-                      >
-                        {hour.toString().padStart(2, "0")}:{min}
-                      </SelectItem>
-                    ))
-                  )}
+                  {timeSlots.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {t}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
