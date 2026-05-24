@@ -8,6 +8,7 @@ import { Save, Loader2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
 export function ScheduleSettingsCard() {
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [id, setId] = useState<string | null>(null);
