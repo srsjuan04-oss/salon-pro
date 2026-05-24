@@ -39,6 +39,58 @@ export default function AuthPage() {
   const [showForgot, setShowForgot] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
 
+  // OTP login (código por correo)
+  const [showOtp, setShowOtp] = useState(false);
+  const [otpEmail, setOtpEmail] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+
+  const handleSendOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+    try {
+      emailSchema.parse(otpEmail);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        setError(err.errors[0].message);
+        return;
+      }
+    }
+    setIsLoading(true);
+    const { error } = await supabase.auth.signInWithOtp({
+      email: otpEmail,
+      options: { shouldCreateUser: false },
+    });
+    setIsLoading(false);
+    if (error) {
+      setError(error.message);
+    } else {
+      setOtpSent(true);
+      setSuccess("Te enviamos un código de 6 dígitos a tu correo.");
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (otpCode.length !== 6) {
+      setError("Ingresa el código de 6 dígitos.");
+      return;
+    }
+    setIsLoading(true);
+    const { error } = await supabase.auth.verifyOtp({
+      email: otpEmail,
+      token: otpCode,
+      type: "email",
+    });
+    setIsLoading(false);
+    if (error) {
+      setError("Código inválido o expirado.");
+    }
+  };
+
+
   const handleForgot = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
