@@ -586,16 +586,11 @@ export default function CalendarPage() {
                   <SelectValue placeholder="Seleccionar hora" />
                 </SelectTrigger>
                 <SelectContent>
-                  {hours.flatMap((hour) =>
-                    ["00", "30"].map((min) => (
-                      <SelectItem
-                        key={`${hour}:${min}`}
-                        value={`${hour.toString().padStart(2, "0")}:${min}`}
-                      >
-                        {hour.toString().padStart(2, "0")}:{min}
-                      </SelectItem>
-                    ))
-                  )}
+                  {timeSlots.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {t}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
