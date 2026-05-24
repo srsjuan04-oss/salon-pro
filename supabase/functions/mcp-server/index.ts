@@ -35,6 +35,26 @@ const ok = (data: unknown) => ({
   content: [{ type: "text", text: JSON.stringify(data) }],
 });
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function resolveBarberId(value?: string): Promise<string | undefined> {
+  if (!value) return undefined;
+  if (UUID_RE.test(value)) return value;
+  const { data } = await supabase
+    .from("barbers").select("id, name").eq("is_active", true).ilike("name", `%${value}%`).limit(1).maybeSingle();
+  if (!data) throw new Error(`Barbero no encontrado: "${value}"`);
+  return data.id;
+}
+
+async function resolveServiceId(value?: string): Promise<string | undefined> {
+  if (!value) return undefined;
+  if (UUID_RE.test(value)) return value;
+  const { data } = await supabase
+    .from("services").select("id, name").eq("is_active", true).ilike("name", `%${value}%`).limit(1).maybeSingle();
+  if (!data) throw new Error(`Servicio no encontrado: "${value}"`);
+  return data.id;
+}
+
 // ===== Tools =====
 
 mcp.tool("list_services", {
