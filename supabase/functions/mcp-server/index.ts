@@ -187,28 +187,78 @@ mcp.tool("find_or_create_customer", {
 });
 
 mcp.tool("create_appointment", {
-  description: "Crea una nueva cita.",
+  description:
+    "Crea una nueva cita. Puedes pasar customer_id O bien customer_phone + customer_name " +
+    "(si no existe el cliente se crea automáticamente). barber_id y service_id aceptan UUID o nombre.",
   inputSchema: z.object({
-    customer_id: z.string(),
+    customer_id: z.string().optional(),
+    customer_phone: z.string().optional(),
+    customer_name: z.string().optional(),
+    customer_email: z.string().optional(),
     barber_id: z.string(),
     service_id: z.string(),
-    appointment_date: z.string(),
-    start_time: z.string(),
+    appointment_date: z.string().describe("YYYY-MM-DD"),
+    start_time: z.string().describe("HH:MM"),
     notes: z.string().optional(),
   }),
   handler: async (args) => {
+    // Resolver/crear cliente
+    let customerId = args.customer_id;
+    if (!customerId) {
+      if (!args.customer_phone) {
+        throw new Error("Falta customer_id o customer_phone para identificar al cliente.");
+      }
+      const { data: existing } = await supabase
+        .from("customers").select("id").eq("phone", args.customer_phone).maybeSingle();
+      if (existing) {
+        customerId = existing.id;
+      } else {
+        if (!args.customer_name) {
+          throw new Error("Cliente nuevo: se requiere customer_name junto con customer_phone.");
+        }
+        const { data: created, error: ce } = await supabase
+          .from("customers").insert({
+            phone: args.customer_phone,
+            name: args.customer_name,
+            email: args.customer_email,
+          }).select("id").single();
+        if (ce) throw new Error(`No se pudo crear el cliente: ${ce.message}`);
+        customerId = created.id;
+      }
+    }
+
     const barberId = await resolveBarberId(args.barber_id);
     const serviceId = await resolveServiceId(args.service_id);
     const { data: svc, error: se } = await supabase
       .from("services").select("duration_minutes").eq("id", serviceId!).single();
     if (se) throw new Error(se.message);
+
     const [h, m] = args.start_time.split(":").map(Number);
-    const endMin = h * 60 + m + svc.duration_minutes;
+    const startMin = h * 60 + m;
+    const endMin = startMin + svc.duration_minutes;
     const end_time = `${String(Math.floor(endMin / 60)).padStart(2, "0")}:${String(endMin % 60).padStart(2, "0")}`;
+
+    // Validar choque
+    const { data: clash } = await supabase
+      .from("appointments")
+      .select("id, start_time, end_time")
+      .eq("appointment_date", args.appointment_date)
+      .eq("barber_id", barberId)
+      .neq("status", "cancelled");
+    const toMin = (t: string) => { const [hh, mm] = t.split(":").map(Number); return hh * 60 + mm; };
+    const overlap = (clash ?? []).find((a: any) =>
+      startMin < toMin(a.end_time) && endMin > toMin(a.start_time)
+    );
+    if (overlap) {
+      throw new Error(
+        `El barbero ya tiene una cita ${overlap.start_time}-${overlap.end_time}. Elige otro horario.`
+      );
+    }
+
     const { data, error } = await supabase
       .from("appointments")
       .insert({
-        customer_id: args.customer_id,
+        customer_id: customerId,
         barber_id: barberId,
         service_id: serviceId,
         appointment_date: args.appointment_date,
