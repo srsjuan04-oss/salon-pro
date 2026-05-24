@@ -91,14 +91,16 @@ mcp.tool("get_availability", {
     service_id: z.string().optional(),
   }),
   handler: async ({ date, barber_id, service_id }) => {
+    const resolvedBarber = await resolveBarberId(barber_id);
+    const resolvedService = await resolveServiceId(service_id);
     let duration = 30;
-    if (service_id) {
+    if (resolvedService) {
       const { data: svc } = await supabase
-        .from("services").select("duration_minutes").eq("id", service_id).maybeSingle();
+        .from("services").select("duration_minutes").eq("id", resolvedService).maybeSingle();
       if (svc) duration = svc.duration_minutes;
     }
     let bq = supabase.from("barbers").select("id, name").eq("is_active", true);
-    if (barber_id) bq = bq.eq("id", barber_id);
+    if (resolvedBarber) bq = bq.eq("id", resolvedBarber);
     const { data: barbers, error: be } = await bq;
     if (be) throw new Error(be.message);
 
