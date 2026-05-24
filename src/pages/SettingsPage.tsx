@@ -5,11 +5,13 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScheduleSettingsCard } from "@/components/settings/ScheduleSettingsCard";
+import { ServicesManager } from "@/components/settings/ServicesManager";
 import {
   Building2,
   Bell,
   Calendar,
   CreditCard,
+  Scissors,
   Save
 } from "lucide-react";
 
