@@ -262,7 +262,16 @@ export default function AuthPage() {
                   )}
                 </Button>
               </form>
+              <Button
+                type="button"
+                variant="link"
+                className="w-full text-sm"
+                onClick={() => { setShowForgot(true); setError(null); setSuccess(null); }}
+              >
+                ¿Olvidaste tu contraseña?
+              </Button>
             </TabsContent>
+
             
             <TabsContent value="register" className="space-y-4 mt-4">
               <form onSubmit={handleRegister} className="space-y-4">
