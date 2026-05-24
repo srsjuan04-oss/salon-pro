@@ -41,11 +41,19 @@ export default function SettingsPage() {
               <Calendar className="w-4 h-4" />
               Calendario
             </TabsTrigger>
+            <TabsTrigger value="services" className="gap-2">
+              <Scissors className="w-4 h-4" />
+              Servicios
+            </TabsTrigger>
             <TabsTrigger value="billing" className="gap-2">
               <CreditCard className="w-4 h-4" />
               Facturación
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="services" className="space-y-6">
+            <ServicesManager />
+          </TabsContent>
 
           <TabsContent value="general" className="space-y-6">
             <div className="bg-card rounded-2xl border shadow-soft p-6 space-y-6">
