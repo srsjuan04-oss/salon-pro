@@ -48,11 +48,20 @@ export default function SettingsPage() {
               <Scissors className="w-4 h-4" />
               Servicios
             </TabsTrigger>
+            <TabsTrigger value="whapify" className="gap-2">
+              <MessageSquare className="w-4 h-4" />
+              Whapify
+            </TabsTrigger>
             <TabsTrigger value="billing" className="gap-2">
               <CreditCard className="w-4 h-4" />
               Facturación
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="whapify" className="space-y-6">
+            <WhapifySettingsCard />
+          </TabsContent>
+
 
           <TabsContent value="services" className="space-y-6">
             <ServicesManager />
