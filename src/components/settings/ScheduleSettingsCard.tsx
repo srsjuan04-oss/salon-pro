@@ -48,8 +48,12 @@ export function ScheduleSettingsCard() {
       ? await supabase.from("schedule_settings").update(payload).eq("id", id)
       : await supabase.from("schedule_settings").insert(payload);
     setSaving(false);
-    if (error) toast.error(error.message);
-    else toast.success("Configuración guardada. El bot la usará en la próxima consulta.");
+    if (error) {
+      toast.error(error.message);
+    } else {
+      queryClient.invalidateQueries({ queryKey: ["schedule_settings"] });
+      toast.success("Configuración guardada. El calendario y el bot ya la usan.");
+    }
   };
 
   const slots = (() => {
