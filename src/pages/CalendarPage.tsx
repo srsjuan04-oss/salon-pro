@@ -578,21 +578,15 @@ export default function CalendarPage() {
 
             <div className="space-y-2">
               <Label>Hora *</Label>
-              <Select
+              <Input
+                type="time"
                 value={formData.time}
-                onValueChange={(value) => setFormData({ ...formData, time: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar hora" />
-                </SelectTrigger>
-                <SelectContent>
-                  {timeSlots.map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {t}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={(e) => setFormData({ ...formData, time: e.target.value })}
+                step={60}
+              />
+              <p className="text-xs text-muted-foreground">
+                Puedes elegir cualquier hora manualmente.
+              </p>
             </div>
 
             <div className="space-y-2">
