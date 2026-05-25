@@ -279,17 +279,43 @@ mcp.tool("create_appointment", {
 });
 
 mcp.tool("reschedule_appointment", {
-  description: "Reagenda una cita.",
+  description: "Reagenda una cita existente. Identifícala por appointment_id (UUID) o por phone + original_date (YYYY-MM-DD de la cita actual).",
   inputSchema: z.object({
-    appointment_id: z.string(),
+    appointment_id: z.string().optional(),
+    phone: z.string().optional(),
+    original_date: z.string().optional(),
     appointment_date: z.string(),
     start_time: z.string(),
     barber_id: z.string().optional(),
   }),
   handler: async (args) => {
+    console.log("[reschedule_appointment] args:", args);
     const barberId = await resolveBarberId(args.barber_id);
+
+    let apptId = args.appointment_id;
+    if (!apptId) {
+      if (!args.phone || !args.original_date) {
+        throw new Error("Debes enviar appointment_id, o phone + original_date.");
+      }
+      const tail = args.phone.replace(/\D/g, "").slice(-10);
+      const { data: cust } = await supabase
+        .from("customers").select("id")
+        .or(`phone.ilike.%${tail}%,whatsapp_id.ilike.%${tail}%`)
+        .limit(1).maybeSingle();
+      if (!cust) throw new Error(`Cliente no encontrado para teléfono ${args.phone}`);
+      const { data: found } = await supabase
+        .from("appointments").select("id")
+        .eq("customer_id", cust.id)
+        .eq("appointment_date", args.original_date)
+        .neq("status", "cancelled")
+        .order("start_time", { ascending: true })
+        .limit(1).maybeSingle();
+      if (!found) throw new Error(`No hay cita activa para ${args.phone} el ${args.original_date}`);
+      apptId = found.id;
+    }
+
     const { data: appt, error: ae } = await supabase
-      .from("appointments").select("service_id").eq("id", args.appointment_id).single();
+      .from("appointments").select("service_id").eq("id", apptId).single();
     if (ae) throw new Error(ae.message);
     const { data: svc } = await supabase
       .from("services").select("duration_minutes").eq("id", appt.service_id).single();
@@ -300,12 +326,17 @@ mcp.tool("reschedule_appointment", {
       appointment_date: args.appointment_date,
       start_time: args.start_time,
       end_time,
+      status: "confirmed",
     };
     if (barberId) update.barber_id = barberId;
     const { data, error } = await supabase
-      .from("appointments").update(update).eq("id", args.appointment_id)
+      .from("appointments").update(update).eq("id", apptId)
       .select().single();
-    if (error) throw new Error(error.message);
+    if (error) {
+      console.error("[reschedule_appointment] update error:", error);
+      throw new Error(error.message);
+    }
+    console.log("[reschedule_appointment] success:", data?.id);
     return ok(data);
   },
 });
