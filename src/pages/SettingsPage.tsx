@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScheduleSettingsCard } from "@/components/settings/ScheduleSettingsCard";
 import { ServicesManager } from "@/components/settings/ServicesManager";
 import { WhapifySettingsCard } from "@/components/settings/WhapifySettingsCard";
+import { McpConnectionCard } from "@/components/settings/McpConnectionCard";
 import {
   Building2,
   Bell,
@@ -53,6 +54,10 @@ export default function SettingsPage() {
               <MessageSquare className="w-4 h-4" />
               Whapify
             </TabsTrigger>
+            <TabsTrigger value="mcp" className="gap-2">
+              <Server className="w-4 h-4" />
+              MCP
+            </TabsTrigger>
             <TabsTrigger value="billing" className="gap-2">
               <CreditCard className="w-4 h-4" />
               Facturación
@@ -61,6 +66,10 @@ export default function SettingsPage() {
 
           <TabsContent value="whapify" className="space-y-6">
             <WhapifySettingsCard />
+          </TabsContent>
+
+          <TabsContent value="mcp" className="space-y-6">
+            <McpConnectionCard />
           </TabsContent>
 
 
