@@ -14,6 +14,7 @@ import {
   CreditCard,
   Scissors,
   MessageSquare,
+  Server,
   Save
 } from "lucide-react";
 
