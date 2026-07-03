@@ -809,6 +809,9 @@ export default function ExpensesPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <CsvImportDialog open={importOpen} onOpenChange={setImportOpen} type="expenses" onImported={loadExpenses} />
+        <ImportHistoryDialog open={historyOpen} onOpenChange={setHistoryOpen} type="expenses" />
       </div>
     </DashboardLayout>
   );
