@@ -204,6 +204,8 @@ mcp.tool("create_appointment", {
     notes: z.string().optional(),
   }),
   handler: async (args) => {
+    console.log("[create_appointment] args:", JSON.stringify(args));
+    try {
     // Resolver/crear cliente
     let customerId = args.customer_id;
     if (!customerId) {
@@ -274,7 +276,12 @@ mcp.tool("create_appointment", {
         status: "confirmed",
       }).select().single();
     if (error) throw new Error(error.message);
+    console.log("[create_appointment] success:", data?.id);
     return ok(data);
+    } catch (e) {
+      console.error("[create_appointment] ERROR:", (e as Error).message, "args:", JSON.stringify(args));
+      throw e;
+    }
   },
 });
 
