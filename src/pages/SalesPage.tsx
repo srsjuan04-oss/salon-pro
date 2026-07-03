@@ -252,15 +252,37 @@ export default function SalesPage() {
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Nueva venta:", formData);
+    if (!formData.client || !formData.service || !formData.amount) {
+      toast.error("Completa todos los campos"); return;
+    }
+    const { data: userData } = await supabase.auth.getUser();
+    const { error } = await supabase.from("sales_entries").insert({
+      client_name: formData.client,
+      service_name: formData.service,
+      amount: parseFloat(formData.amount),
+      sale_date: format(new Date(), "yyyy-MM-dd"),
+      sale_time: format(new Date(), "HH:mm"),
+      payment_method: formData.paymentMethod || null,
+      status: "paid",
+      source: "manual",
+      created_by: userData.user?.id,
+    });
+    if (error) { toast.error(error.message); return; }
+    toast.success("Venta registrada");
     setIsDialogOpen(false);
     setFormData({ client: "", service: "", amount: "", paymentMethod: "" });
+    loadSales();
   };
 
   const markAsPaid = async (saleId: string, method: string) => {
-    await supabase.from("appointments").update({ status: "completed" }).eq("id", saleId);
+    if (saleId.startsWith("entry-")) {
+      const realId = saleId.replace("entry-", "");
+      await supabase.from("sales_entries").update({ status: "paid", payment_method: method }).eq("id", realId);
+    } else {
+      await supabase.from("appointments").update({ status: "completed" }).eq("id", saleId);
+    }
     setSales(prev => prev.map(sale => 
       sale.id === saleId ? { ...sale, status: "paid" as const, method } : sale
     ));
