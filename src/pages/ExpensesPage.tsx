@@ -85,72 +85,7 @@ const categories = [
 
 const paymentMethods = ["Efectivo", "Transferencia", "Débito", "Crédito"];
 
-// Generar gastos de demostración
-const generateExpensesData = (): Expense[] => {
-  const today = new Date("2026-01-15");
-  const expenses: Expense[] = [];
-  
-  let id = 1;
-  
-  // Gastos fijos mensuales (se repiten cada mes)
-  const fixedExpenses = [
-    { description: "Alquiler del local", category: "Alquiler", amount: 8500 },
-    { description: "Salario - Ana López", category: "Salarios", amount: 4500 },
-    { description: "Salario - Miguel Santos", category: "Salarios", amount: 4200 },
-    { description: "Salario - Carmen Ruiz", category: "Salarios", amount: 3800 },
-    { description: "Electricidad", category: "Servicios", amount: 1200 },
-    { description: "Agua", category: "Servicios", amount: 350 },
-    { description: "Internet y teléfono", category: "Internet/Teléfono", amount: 450 },
-    { description: "Seguro del local", category: "Seguros", amount: 800 },
-  ];
-
-  // Agregar gastos fijos (día 1 y 15 de cada mes)
-  fixedExpenses.forEach(exp => {
-    expenses.push({
-      id: String(id++),
-      description: exp.description,
-      category: exp.category,
-      date: "2026-01-01",
-      amount: exp.amount,
-      paymentMethod: "Transferencia",
-      type: "fixed",
-    });
-  });
-
-  // Gastos variables aleatorios
-  const variableDescriptions = [
-    { desc: "Productos capilares", category: "Productos", min: 300, max: 800 },
-    { desc: "Tintes y decolorantes", category: "Productos", min: 400, max: 1000 },
-    { desc: "Esmaltes y uñas", category: "Productos", min: 200, max: 500 },
-    { desc: "Insumos de limpieza", category: "Insumos", min: 80, max: 200 },
-    { desc: "Toallas y desechables", category: "Insumos", min: 100, max: 300 },
-    { desc: "Publicidad en redes", category: "Marketing", min: 500, max: 1500 },
-    { desc: "Reparación de equipos", category: "Mantenimiento", min: 200, max: 800 },
-    { desc: "Compras menores", category: "Otros", min: 50, max: 150 },
-  ];
-
-  for (let daysAgo = 0; daysAgo <= 30; daysAgo++) {
-    const date = subDays(today, daysAgo);
-    const numExpenses = Math.floor(Math.random() * 3); // 0-2 gastos variables por día
-    
-    for (let i = 0; i < numExpenses; i++) {
-      const item = variableDescriptions[Math.floor(Math.random() * variableDescriptions.length)];
-      expenses.push({
-        id: String(id++),
-        description: item.desc,
-        category: item.category,
-        date: format(date, "yyyy-MM-dd"),
-        amount: Math.floor(Math.random() * (item.max - item.min) + item.min),
-        paymentMethod: paymentMethods[Math.floor(Math.random() * paymentMethods.length)],
-        type: "variable",
-      });
-    }
-  }
-
-  return expenses.sort((a, b) => b.date.localeCompare(a.date));
-};
-
-const initialExpenses = generateExpensesData();
+const initialExpenses: Expense[] = [];
 
 const categoryColors: Record<string, string> = {
   "Alquiler": "bg-warning/10 text-warning border-warning/20",
