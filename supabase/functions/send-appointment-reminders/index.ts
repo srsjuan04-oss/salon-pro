@@ -98,6 +98,10 @@ Deno.serve(async (req) => {
         await supabase.from("appointment_reminders").update({ status: "cancelled", error_message: "Cita cancelada o inexistente" }).eq("id", rem.id);
         continue;
       }
+      if (!activeTypes.has(rem.reminder_type)) {
+        await supabase.from("appointment_reminders").update({ status: "cancelled", error_message: "Recordatorio desactivado en configuración" }).eq("id", rem.id);
+        continue;
+      }
       if (!rem.whapify_flow_id || !rem.customer_phone) {
         await supabase.from("appointment_reminders").update({ status: "failed", error_message: "Faltan flow_id o teléfono" }).eq("id", rem.id);
         failed++;
