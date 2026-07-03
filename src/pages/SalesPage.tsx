@@ -15,8 +15,13 @@ import {
   CalendarDays,
   CalendarRange,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Upload,
+  History,
 } from "lucide-react";
+import { CsvImportDialog } from "@/components/financial/CsvImportDialog";
+import { ImportHistoryDialog } from "@/components/financial/ImportHistoryDialog";
+import { toast } from "sonner";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
 import { format, subDays, isWithinInterval, parseISO, startOfDay, endOfDay } from "date-fns";
 import { es } from "date-fns/locale";
@@ -138,6 +143,8 @@ const dateFilterLabels: Record<DateFilter, string> = {
 export default function SalesPage() {
   const [sales, setSales] = useState<Sale[]>(initialSales);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("all");
   const [dateFilter, setDateFilter] = useState<DateFilter>("30days");
   const [customDateRange, setCustomDateRange] = useState<{
@@ -153,30 +160,46 @@ export default function SalesPage() {
 
   const today = new Date();
 
-  useEffect(() => {
-    const load = async () => {
-      const { data } = await supabase
+  const loadSales = async () => {
+    const [apptRes, entryRes] = await Promise.all([
+      supabase
         .from("appointments")
-        .select(
-          "id, appointment_date, start_time, status, customers(name), services(name, price), barbers(name)"
-        )
+        .select("id, appointment_date, start_time, status, customers(name), services(name, price), barbers(name)")
         .neq("status", "cancelled")
-        .order("appointment_date", { ascending: false });
-      const mapped: Sale[] = (data ?? []).map((a: any) => ({
-        id: a.id,
-        client: a.customers?.name ?? "Sin cliente",
-        service: a.services?.name ?? "Servicio",
-        amount: Number(a.services?.price) || 0,
-        stylist: a.barbers?.name ?? "—",
-        date: a.appointment_date,
-        time: (a.start_time ?? "").slice(0, 5),
-        method: a.status === "completed" ? "Efectivo" : "-",
-        status: a.status === "completed" ? "paid" : "pending",
-      }));
-      setSales(mapped);
-    };
-    load();
-  }, []);
+        .order("appointment_date", { ascending: false }),
+      supabase
+        .from("sales_entries")
+        .select("*")
+        .order("sale_date", { ascending: false }),
+    ]);
+    const fromAppts: Sale[] = (apptRes.data ?? []).map((a: any) => ({
+      id: a.id,
+      client: a.customers?.name ?? "Sin cliente",
+      service: a.services?.name ?? "Servicio",
+      amount: Number(a.services?.price) || 0,
+      stylist: a.barbers?.name ?? "—",
+      date: a.appointment_date,
+      time: (a.start_time ?? "").slice(0, 5),
+      method: a.status === "completed" ? "Efectivo" : "-",
+      status: a.status === "completed" ? "paid" : "pending",
+    }));
+    const fromEntries: Sale[] = (entryRes.data ?? []).map((e: any) => ({
+      id: `entry-${e.id}`,
+      client: e.client_name,
+      service: e.service_name,
+      amount: Number(e.amount),
+      stylist: e.stylist_name ?? "—",
+      date: e.sale_date,
+      time: e.sale_time ?? "",
+      method: e.payment_method ?? "-",
+      status: e.status === "pending" ? "pending" : "paid",
+    }));
+    const merged = [...fromAppts, ...fromEntries].sort((a, b) => b.date.localeCompare(a.date));
+    setSales(merged);
+  };
+
+  useEffect(() => { loadSales(); }, []);
+
 
 
   // Filtrar ventas por fecha
@@ -229,15 +252,37 @@ export default function SalesPage() {
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Nueva venta:", formData);
+    if (!formData.client || !formData.service || !formData.amount) {
+      toast.error("Completa todos los campos"); return;
+    }
+    const { data: userData } = await supabase.auth.getUser();
+    const { error } = await supabase.from("sales_entries").insert({
+      client_name: formData.client,
+      service_name: formData.service,
+      amount: parseFloat(formData.amount),
+      sale_date: format(new Date(), "yyyy-MM-dd"),
+      sale_time: format(new Date(), "HH:mm"),
+      payment_method: formData.paymentMethod || null,
+      status: "paid",
+      source: "manual",
+      created_by: userData.user?.id,
+    });
+    if (error) { toast.error(error.message); return; }
+    toast.success("Venta registrada");
     setIsDialogOpen(false);
     setFormData({ client: "", service: "", amount: "", paymentMethod: "" });
+    loadSales();
   };
 
   const markAsPaid = async (saleId: string, method: string) => {
-    await supabase.from("appointments").update({ status: "completed" }).eq("id", saleId);
+    if (saleId.startsWith("entry-")) {
+      const realId = saleId.replace("entry-", "");
+      await supabase.from("sales_entries").update({ status: "paid", payment_method: method }).eq("id", realId);
+    } else {
+      await supabase.from("appointments").update({ status: "completed" }).eq("id", saleId);
+    }
     setSales(prev => prev.map(sale => 
       sale.id === saleId ? { ...sale, status: "paid" as const, method } : sale
     ));
@@ -281,10 +326,14 @@ export default function SalesPage() {
               Control de ingresos por servicios prestados
             </p>
           </div>
-          <div className="flex gap-3">
-            <Button variant="outline" className="gap-2">
-              <Download className="w-4 h-4" />
-              Exportar
+          <div className="flex gap-2 flex-wrap">
+            <Button variant="outline" size="sm" onClick={() => setHistoryOpen(true)}>
+              <History className="w-4 h-4 mr-2" />
+              Historial
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
+              <Upload className="w-4 h-4 mr-2" />
+              Importar CSV
             </Button>
             <Button className="gradient-gold shadow-gold gap-2" onClick={() => setIsDialogOpen(true)}>
               <Plus className="w-4 h-4" />
@@ -292,6 +341,9 @@ export default function SalesPage() {
             </Button>
           </div>
         </div>
+
+        <CsvImportDialog open={importOpen} onOpenChange={setImportOpen} type="sales" onImported={loadSales} />
+        <ImportHistoryDialog open={historyOpen} onOpenChange={setHistoryOpen} type="sales" />
 
         {/* Date Filters */}
         <div className="bg-card rounded-2xl border shadow-soft p-4">

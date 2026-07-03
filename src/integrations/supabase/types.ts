@@ -250,6 +250,84 @@ export type Database = {
         }
         Relationships: []
       }
+      expenses: {
+        Row: {
+          amount: number
+          category: string
+          created_at: string
+          created_by: string | null
+          description: string
+          expense_date: string
+          id: string
+          import_id: string | null
+          payment_method: string | null
+          source: string
+          type: string
+        }
+        Insert: {
+          amount: number
+          category: string
+          created_at?: string
+          created_by?: string | null
+          description: string
+          expense_date: string
+          id?: string
+          import_id?: string | null
+          payment_method?: string | null
+          source?: string
+          type?: string
+        }
+        Update: {
+          amount?: number
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          expense_date?: string
+          id?: string
+          import_id?: string | null
+          payment_method?: string | null
+          source?: string
+          type?: string
+        }
+        Relationships: []
+      }
+      financial_imports: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          error_message: string | null
+          file_name: string | null
+          id: string
+          import_type: string
+          rows_failed: number
+          rows_imported: number
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          error_message?: string | null
+          file_name?: string | null
+          id?: string
+          import_type: string
+          rows_failed?: number
+          rows_imported?: number
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          error_message?: string | null
+          file_name?: string | null
+          id?: string
+          import_type?: string
+          rows_failed?: number
+          rows_imported?: number
+          status?: string
+        }
+        Relationships: []
+      }
       notification_flows: {
         Row: {
           created_at: string
@@ -354,6 +432,54 @@ export type Database = {
           reminder_type?: string
           updated_at?: string
           whapify_flow_id?: string | null
+        }
+        Relationships: []
+      }
+      sales_entries: {
+        Row: {
+          amount: number
+          client_name: string
+          created_at: string
+          created_by: string | null
+          id: string
+          import_id: string | null
+          payment_method: string | null
+          sale_date: string
+          sale_time: string | null
+          service_name: string
+          source: string
+          status: string
+          stylist_name: string | null
+        }
+        Insert: {
+          amount: number
+          client_name: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          import_id?: string | null
+          payment_method?: string | null
+          sale_date: string
+          sale_time?: string | null
+          service_name: string
+          source?: string
+          status?: string
+          stylist_name?: string | null
+        }
+        Update: {
+          amount?: number
+          client_name?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          import_id?: string | null
+          payment_method?: string | null
+          sale_date?: string
+          sale_time?: string | null
+          service_name?: string
+          source?: string
+          status?: string
+          stylist_name?: string | null
         }
         Relationships: []
       }
