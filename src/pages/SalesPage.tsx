@@ -15,8 +15,13 @@ import {
   CalendarDays,
   CalendarRange,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Upload,
+  History,
 } from "lucide-react";
+import { CsvImportDialog } from "@/components/financial/CsvImportDialog";
+import { ImportHistoryDialog } from "@/components/financial/ImportHistoryDialog";
+import { toast } from "sonner";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
 import { format, subDays, isWithinInterval, parseISO, startOfDay, endOfDay } from "date-fns";
 import { es } from "date-fns/locale";
