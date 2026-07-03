@@ -138,6 +138,8 @@ const dateFilterLabels: Record<DateFilter, string> = {
 export default function SalesPage() {
   const [sales, setSales] = useState<Sale[]>(initialSales);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("all");
   const [dateFilter, setDateFilter] = useState<DateFilter>("30days");
   const [customDateRange, setCustomDateRange] = useState<{
