@@ -265,7 +265,7 @@ export default function ClientsPage() {
         name: formData.name,
         email: formData.email,
         phone: formData.phone,
-      })
+      } as any)
       .select()
       .single();
     if (error) {

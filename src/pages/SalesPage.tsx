@@ -268,7 +268,7 @@ export default function SalesPage() {
       status: "paid",
       source: "manual",
       created_by: userData.user?.id,
-    });
+    } as any);
     if (error) { toast.error(error.message); return; }
     toast.success("Venta registrada");
     setIsDialogOpen(false);

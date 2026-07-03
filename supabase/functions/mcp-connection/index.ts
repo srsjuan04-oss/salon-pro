@@ -44,15 +44,26 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Fetch this admin's organization mcp_token
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const admin = createClient(supabaseUrl, serviceKey);
+    const { data: role } = await admin
+      .from("user_roles").select("organization_id").eq("user_id", user.id).maybeSingle();
+    if (!role?.organization_id) {
+      return new Response(JSON.stringify({ error: "Sin organización" }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    const { data: org } = await admin
+      .from("organizations").select("mcp_token").eq("id", role.organization_id).single();
+
     const mcpUrl = `${supabaseUrl}/functions/v1/mcp-server`;
-    const mcpToken = Deno.env.get("MCP_API_TOKEN") ?? "";
 
     return new Response(
       JSON.stringify({
         url: mcpUrl,
         name: "SalonPro MCP",
         auth_type: "bearer",
-        token: mcpToken,
+        token: org?.mcp_token ?? "",
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

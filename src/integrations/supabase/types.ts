@@ -22,6 +22,7 @@ export type Database = {
           customer_phone: string
           error_message: string | null
           id: string
+          organization_id: string
           reminder_type: string
           scheduled_at: string
           sent_at: string | null
@@ -37,6 +38,7 @@ export type Database = {
           customer_phone: string
           error_message?: string | null
           id?: string
+          organization_id: string
           reminder_type: string
           scheduled_at: string
           sent_at?: string | null
@@ -52,6 +54,7 @@ export type Database = {
           customer_phone?: string
           error_message?: string | null
           id?: string
+          organization_id?: string
           reminder_type?: string
           scheduled_at?: string
           sent_at?: string | null
@@ -68,6 +71,13 @@ export type Database = {
             referencedRelation: "appointments"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "appointment_reminders_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
         ]
       }
       appointments: {
@@ -81,6 +91,7 @@ export type Database = {
           google_event_id: string | null
           id: string
           notes: string | null
+          organization_id: string
           service_id: string
           source: string | null
           start_time: string
@@ -97,6 +108,7 @@ export type Database = {
           google_event_id?: string | null
           id?: string
           notes?: string | null
+          organization_id: string
           service_id: string
           source?: string | null
           start_time: string
@@ -113,6 +125,7 @@ export type Database = {
           google_event_id?: string | null
           id?: string
           notes?: string | null
+          organization_id?: string
           service_id?: string
           source?: string | null
           start_time?: string
@@ -135,6 +148,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "appointments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "appointments_service_id_fkey"
             columns: ["service_id"]
             isOneToOne: false
@@ -151,6 +171,7 @@ export type Database = {
           end_time: string
           id: string
           is_available: boolean
+          organization_id: string
           start_time: string
         }
         Insert: {
@@ -160,6 +181,7 @@ export type Database = {
           end_time: string
           id?: string
           is_available?: boolean
+          organization_id: string
           start_time: string
         }
         Update: {
@@ -169,6 +191,7 @@ export type Database = {
           end_time?: string
           id?: string
           is_available?: boolean
+          organization_id?: string
           start_time?: string
         }
         Relationships: [
@@ -177,6 +200,13 @@ export type Database = {
             columns: ["barber_id"]
             isOneToOne: false
             referencedRelation: "barbers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "barber_schedules_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -189,6 +219,7 @@ export type Database = {
           id: string
           is_active: boolean
           name: string
+          organization_id: string
           phone: string | null
           specialty: string | null
           updated_at: string
@@ -200,6 +231,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name: string
+          organization_id: string
           phone?: string | null
           specialty?: string | null
           updated_at?: string
@@ -211,11 +243,20 @@ export type Database = {
           id?: string
           is_active?: boolean
           name?: string
+          organization_id?: string
           phone?: string | null
           specialty?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "barbers_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       customers: {
         Row: {
@@ -224,6 +265,7 @@ export type Database = {
           id: string
           name: string
           notes: string | null
+          organization_id: string
           phone: string
           updated_at: string
           whatsapp_id: string | null
@@ -234,6 +276,7 @@ export type Database = {
           id?: string
           name: string
           notes?: string | null
+          organization_id: string
           phone: string
           updated_at?: string
           whatsapp_id?: string | null
@@ -244,11 +287,20 @@ export type Database = {
           id?: string
           name?: string
           notes?: string | null
+          organization_id?: string
           phone?: string
           updated_at?: string
           whatsapp_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "customers_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       expenses: {
         Row: {
@@ -260,6 +312,7 @@ export type Database = {
           expense_date: string
           id: string
           import_id: string | null
+          organization_id: string
           payment_method: string | null
           source: string
           type: string
@@ -273,6 +326,7 @@ export type Database = {
           expense_date: string
           id?: string
           import_id?: string | null
+          organization_id: string
           payment_method?: string | null
           source?: string
           type?: string
@@ -286,11 +340,20 @@ export type Database = {
           expense_date?: string
           id?: string
           import_id?: string | null
+          organization_id?: string
           payment_method?: string | null
           source?: string
           type?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "expenses_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       financial_imports: {
         Row: {
@@ -300,6 +363,7 @@ export type Database = {
           file_name: string | null
           id: string
           import_type: string
+          organization_id: string
           rows_failed: number
           rows_imported: number
           status: string
@@ -311,6 +375,7 @@ export type Database = {
           file_name?: string | null
           id?: string
           import_type: string
+          organization_id: string
           rows_failed?: number
           rows_imported?: number
           status?: string
@@ -322,11 +387,20 @@ export type Database = {
           file_name?: string | null
           id?: string
           import_type?: string
+          organization_id?: string
           rows_failed?: number
           rows_imported?: number
           status?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "financial_imports_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       notification_flows: {
         Row: {
@@ -335,6 +409,7 @@ export type Database = {
           id: string
           is_active: boolean
           name: string
+          organization_id: string
           template_id: string | null
           trigger_minutes: number
           trigger_type: string
@@ -346,6 +421,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name: string
+          organization_id: string
           template_id?: string | null
           trigger_minutes: number
           trigger_type: string
@@ -357,12 +433,20 @@ export type Database = {
           id?: string
           is_active?: boolean
           name?: string
+          organization_id?: string
           template_id?: string | null
           trigger_minutes?: number
           trigger_type?: string
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "notification_flows_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "notification_flows_template_id_fkey"
             columns: ["template_id"]
@@ -371,6 +455,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      organizations: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          mcp_token: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          mcp_token?: string
+          name?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          mcp_token?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
@@ -409,6 +520,7 @@ export type Database = {
           created_at: string
           id: string
           minutes_before: number
+          organization_id: string
           reminder_type: string
           updated_at: string
           whapify_flow_id: string | null
@@ -419,6 +531,7 @@ export type Database = {
           created_at?: string
           id?: string
           minutes_before: number
+          organization_id: string
           reminder_type: string
           updated_at?: string
           whapify_flow_id?: string | null
@@ -429,11 +542,20 @@ export type Database = {
           created_at?: string
           id?: string
           minutes_before?: number
+          organization_id?: string
           reminder_type?: string
           updated_at?: string
           whapify_flow_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "reminder_settings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sales_entries: {
         Row: {
@@ -443,6 +565,7 @@ export type Database = {
           created_by: string | null
           id: string
           import_id: string | null
+          organization_id: string
           payment_method: string | null
           sale_date: string
           sale_time: string | null
@@ -458,6 +581,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           import_id?: string | null
+          organization_id: string
           payment_method?: string | null
           sale_date: string
           sale_time?: string | null
@@ -473,6 +597,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           import_id?: string | null
+          organization_id?: string
           payment_method?: string | null
           sale_date?: string
           sale_time?: string | null
@@ -481,7 +606,15 @@ export type Database = {
           status?: string
           stylist_name?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "sales_entries_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       schedule_settings: {
         Row: {
@@ -489,6 +622,7 @@ export type Database = {
           day_end: string
           day_start: string
           id: string
+          organization_id: string
           singleton: boolean
           slot_minutes: number
           updated_at: string
@@ -498,6 +632,7 @@ export type Database = {
           day_end?: string
           day_start?: string
           id?: string
+          organization_id: string
           singleton?: boolean
           slot_minutes?: number
           updated_at?: string
@@ -507,17 +642,27 @@ export type Database = {
           day_end?: string
           day_start?: string
           id?: string
+          organization_id?: string
           singleton?: boolean
           slot_minutes?: number
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "schedule_settings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sent_notifications: {
         Row: {
           appointment_id: string
           flow_id: string
           id: string
+          organization_id: string
           sent_at: string
           status: string | null
           whatsapp_message_id: string | null
@@ -526,6 +671,7 @@ export type Database = {
           appointment_id: string
           flow_id: string
           id?: string
+          organization_id: string
           sent_at?: string
           status?: string | null
           whatsapp_message_id?: string | null
@@ -534,6 +680,7 @@ export type Database = {
           appointment_id?: string
           flow_id?: string
           id?: string
+          organization_id?: string
           sent_at?: string
           status?: string | null
           whatsapp_message_id?: string | null
@@ -553,6 +700,13 @@ export type Database = {
             referencedRelation: "notification_flows"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "sent_notifications_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
         ]
       }
       services: {
@@ -563,6 +717,7 @@ export type Database = {
           id: string
           is_active: boolean
           name: string
+          organization_id: string
           price: number
         }
         Insert: {
@@ -572,6 +727,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name: string
+          organization_id: string
           price?: number
         }
         Update: {
@@ -581,30 +737,50 @@ export type Database = {
           id?: string
           is_active?: boolean
           name?: string
+          organization_id?: string
           price?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "services_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
           created_at: string
           id: string
+          organization_id: string
           role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Insert: {
           created_at?: string
           id?: string
+          organization_id: string
           role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Update: {
           created_at?: string
           id?: string
+          organization_id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "user_roles_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       whapify_flows: {
         Row: {
@@ -613,6 +789,7 @@ export type Database = {
           flow_name: string
           id: string
           is_active: boolean
+          organization_id: string
           raw_data: Json | null
           synced_at: string
           updated_at: string
@@ -623,6 +800,7 @@ export type Database = {
           flow_name: string
           id?: string
           is_active?: boolean
+          organization_id: string
           raw_data?: Json | null
           synced_at?: string
           updated_at?: string
@@ -633,11 +811,20 @@ export type Database = {
           flow_name?: string
           id?: string
           is_active?: boolean
+          organization_id?: string
           raw_data?: Json | null
           synced_at?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "whapify_flows_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       whapify_settings: {
         Row: {
@@ -646,6 +833,7 @@ export type Database = {
           is_active: boolean
           last_synced_at: string | null
           last_validated_at: string | null
+          organization_id: string
           singleton: boolean
           updated_at: string
           whapify_token: string | null
@@ -656,6 +844,7 @@ export type Database = {
           is_active?: boolean
           last_synced_at?: string | null
           last_validated_at?: string | null
+          organization_id: string
           singleton?: boolean
           updated_at?: string
           whapify_token?: string | null
@@ -666,11 +855,20 @@ export type Database = {
           is_active?: boolean
           last_synced_at?: string | null
           last_validated_at?: string | null
+          organization_id?: string
           singleton?: boolean
           updated_at?: string
           whapify_token?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "whapify_settings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       whatsapp_conversations: {
         Row: {
@@ -680,6 +878,7 @@ export type Database = {
           id: string
           last_message: string | null
           last_message_at: string | null
+          organization_id: string
           phone_number: string
           status: string
           updated_at: string
@@ -691,6 +890,7 @@ export type Database = {
           id?: string
           last_message?: string | null
           last_message_at?: string | null
+          organization_id: string
           phone_number: string
           status?: string
           updated_at?: string
@@ -702,6 +902,7 @@ export type Database = {
           id?: string
           last_message?: string | null
           last_message_at?: string | null
+          organization_id?: string
           phone_number?: string
           status?: string
           updated_at?: string
@@ -714,6 +915,13 @@ export type Database = {
             referencedRelation: "customers"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "whatsapp_conversations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
         ]
       }
       whatsapp_messages: {
@@ -724,6 +932,7 @@ export type Database = {
           direction: string
           id: string
           message_type: string
+          organization_id: string
           status: string | null
           whatsapp_message_id: string | null
         }
@@ -734,6 +943,7 @@ export type Database = {
           direction: string
           id?: string
           message_type?: string
+          organization_id: string
           status?: string | null
           whatsapp_message_id?: string | null
         }
@@ -744,6 +954,7 @@ export type Database = {
           direction?: string
           id?: string
           message_type?: string
+          organization_id?: string
           status?: string | null
           whatsapp_message_id?: string | null
         }
@@ -753,6 +964,13 @@ export type Database = {
             columns: ["conversation_id"]
             isOneToOne: false
             referencedRelation: "whatsapp_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_messages_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -772,6 +990,7 @@ export type Database = {
           meta_status: string | null
           meta_template_id: string | null
           name: string
+          organization_id: string
           updated_at: string
         }
         Insert: {
@@ -788,6 +1007,7 @@ export type Database = {
           meta_status?: string | null
           meta_template_id?: string | null
           name: string
+          organization_id: string
           updated_at?: string
         }
         Update: {
@@ -804,15 +1024,25 @@ export type Database = {
           meta_status?: string | null
           meta_template_id?: string | null
           name?: string
+          organization_id?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_templates_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      current_org_id: { Args: never; Returns: string }
       generate_appointment_reminders: {
         Args: { _appointment_id: string }
         Returns: undefined

@@ -42,7 +42,7 @@ export function useCreateFlow() {
     mutationFn: async (flow: Omit<NotificationFlow, "id" | "created_at" | "updated_at" | "template">) => {
       const { data, error } = await supabase
         .from("notification_flows")
-        .insert(flow)
+        .insert(flow as any)
         .select()
         .single();
 

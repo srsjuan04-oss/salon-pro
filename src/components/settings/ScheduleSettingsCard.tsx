@@ -46,7 +46,7 @@ export function ScheduleSettingsCard() {
     const payload = { day_start: dayStart, day_end: dayEnd, slot_minutes: slot };
     const { error } = id
       ? await supabase.from("schedule_settings").update(payload).eq("id", id)
-      : await supabase.from("schedule_settings").insert(payload);
+      : await supabase.from("schedule_settings").insert(payload as any);
     setSaving(false);
     if (error) {
       toast.error(error.message);
