@@ -253,7 +253,7 @@ export default function ExpensesPage() {
       type: formData.type,
       source: "manual",
       created_by: userData.user?.id,
-    });
+    } as any);
     if (error) { toast.error(error.message); return; }
     toast.success("Gasto registrado");
     setFormData({ description: "", category: "", amount: "", paymentMethod: "", type: "variable" });

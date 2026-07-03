@@ -92,7 +92,7 @@ export function useAuth() {
         user_id: data.user.id,
         name,
         email,
-      });
+      } as any);
     }
 
     return { error };

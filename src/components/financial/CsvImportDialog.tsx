@@ -82,7 +82,7 @@ export function CsvImportDialog({ open, onOpenChange, type, onImported }: Props)
 
       const { data: importRow, error: importErr } = await supabase
         .from("financial_imports")
-        .insert({ import_type: type, file_name: file.name, status: "processing", created_by: userId })
+        .insert({ import_type: type, file_name: file.name, status: "processing", created_by: userId } as any)
         .select().single();
       if (importErr) throw importErr;
 
