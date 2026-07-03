@@ -69,6 +69,13 @@ Deno.serve(async (req) => {
     const now = new Date();
     const tenMinAgo = new Date(now.getTime() - 10 * 60 * 1000);
 
+    // Load active reminder settings — inactive types must NOT send
+    const { data: activeSettings } = await supabase
+      .from("reminder_settings")
+      .select("reminder_type, whapify_flow_id, active")
+      .eq("active", true);
+    const activeTypes = new Set((activeSettings ?? []).map((s: any) => s.reminder_type));
+
     const { data: reminders, error } = await supabase
       .from("appointment_reminders")
       .select(`
