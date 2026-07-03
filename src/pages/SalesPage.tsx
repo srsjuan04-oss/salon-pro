@@ -155,30 +155,46 @@ export default function SalesPage() {
 
   const today = new Date();
 
-  useEffect(() => {
-    const load = async () => {
-      const { data } = await supabase
+  const loadSales = async () => {
+    const [apptRes, entryRes] = await Promise.all([
+      supabase
         .from("appointments")
-        .select(
-          "id, appointment_date, start_time, status, customers(name), services(name, price), barbers(name)"
-        )
+        .select("id, appointment_date, start_time, status, customers(name), services(name, price), barbers(name)")
         .neq("status", "cancelled")
-        .order("appointment_date", { ascending: false });
-      const mapped: Sale[] = (data ?? []).map((a: any) => ({
-        id: a.id,
-        client: a.customers?.name ?? "Sin cliente",
-        service: a.services?.name ?? "Servicio",
-        amount: Number(a.services?.price) || 0,
-        stylist: a.barbers?.name ?? "—",
-        date: a.appointment_date,
-        time: (a.start_time ?? "").slice(0, 5),
-        method: a.status === "completed" ? "Efectivo" : "-",
-        status: a.status === "completed" ? "paid" : "pending",
-      }));
-      setSales(mapped);
-    };
-    load();
-  }, []);
+        .order("appointment_date", { ascending: false }),
+      supabase
+        .from("sales_entries")
+        .select("*")
+        .order("sale_date", { ascending: false }),
+    ]);
+    const fromAppts: Sale[] = (apptRes.data ?? []).map((a: any) => ({
+      id: a.id,
+      client: a.customers?.name ?? "Sin cliente",
+      service: a.services?.name ?? "Servicio",
+      amount: Number(a.services?.price) || 0,
+      stylist: a.barbers?.name ?? "—",
+      date: a.appointment_date,
+      time: (a.start_time ?? "").slice(0, 5),
+      method: a.status === "completed" ? "Efectivo" : "-",
+      status: a.status === "completed" ? "paid" : "pending",
+    }));
+    const fromEntries: Sale[] = (entryRes.data ?? []).map((e: any) => ({
+      id: `entry-${e.id}`,
+      client: e.client_name,
+      service: e.service_name,
+      amount: Number(e.amount),
+      stylist: e.stylist_name ?? "—",
+      date: e.sale_date,
+      time: e.sale_time ?? "",
+      method: e.payment_method ?? "-",
+      status: e.status === "pending" ? "pending" : "paid",
+    }));
+    const merged = [...fromAppts, ...fromEntries].sort((a, b) => b.date.localeCompare(a.date));
+    setSales(merged);
+  };
+
+  useEffect(() => { loadSales(); }, []);
+
 
 
   // Filtrar ventas por fecha
