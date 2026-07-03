@@ -326,10 +326,14 @@ export default function SalesPage() {
               Control de ingresos por servicios prestados
             </p>
           </div>
-          <div className="flex gap-3">
-            <Button variant="outline" className="gap-2">
-              <Download className="w-4 h-4" />
-              Exportar
+          <div className="flex gap-2 flex-wrap">
+            <Button variant="outline" size="sm" onClick={() => setHistoryOpen(true)}>
+              <History className="w-4 h-4 mr-2" />
+              Historial
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
+              <Upload className="w-4 h-4 mr-2" />
+              Importar CSV
             </Button>
             <Button className="gradient-gold shadow-gold gap-2" onClick={() => setIsDialogOpen(true)}>
               <Plus className="w-4 h-4" />
@@ -337,6 +341,9 @@ export default function SalesPage() {
             </Button>
           </div>
         </div>
+
+        <CsvImportDialog open={importOpen} onOpenChange={setImportOpen} type="sales" onImported={loadSales} />
+        <ImportHistoryDialog open={historyOpen} onOpenChange={setHistoryOpen} type="sales" />
 
         {/* Date Filters */}
         <div className="bg-card rounded-2xl border shadow-soft p-4">
