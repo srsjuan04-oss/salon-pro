@@ -40,7 +40,7 @@ export function useCreateTemplate() {
     mutationFn: async (template: Omit<WhatsAppTemplate, "id" | "created_at" | "updated_at" | "meta_template_id" | "meta_status" | "meta_rejection_reason">) => {
       const { data, error } = await supabase
         .from("whatsapp_templates")
-        .insert(template)
+        .insert(template as any)
         .select()
         .single();
 

@@ -98,7 +98,7 @@ export function useCreateAppointment() {
     }) => {
       const { data, error } = await supabase
         .from("appointments")
-        .insert(appointment)
+        .insert(appointment as any)
         .select(`
           *,
           customer:customers(*),
@@ -159,7 +159,7 @@ export function useCreateCustomer() {
     }) => {
       const { data, error } = await supabase
         .from("customers")
-        .insert(customer)
+        .insert(customer as any)
         .select()
         .single();
 

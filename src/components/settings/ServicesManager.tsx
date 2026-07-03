@@ -68,7 +68,7 @@ export function ServicesManager() {
         const { error } = await supabase.from("services").update(payload).eq("id", f.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("services").insert(payload);
+        const { error } = await supabase.from("services").insert(payload as any);
         if (error) throw error;
       }
     },

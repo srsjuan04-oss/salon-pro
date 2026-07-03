@@ -114,7 +114,7 @@ export function CsvImportDialog({ open, onOpenChange, type, onImported }: Props)
         }).filter(Boolean) as any[];
         failed = dataRows.length - records.length;
         if (records.length > 0) {
-          const { error } = await supabase.from("expenses").insert(records);
+          const { error } = await supabase.from("expenses").insert(records as any);
           if (error) throw error;
           imported = records.length;
         }
@@ -145,7 +145,7 @@ export function CsvImportDialog({ open, onOpenChange, type, onImported }: Props)
         }).filter(Boolean) as any[];
         failed = dataRows.length - records.length;
         if (records.length > 0) {
-          const { error } = await supabase.from("sales_entries").insert(records);
+          const { error } = await supabase.from("sales_entries").insert(records as any);
           if (error) throw error;
           imported = records.length;
         }
