@@ -104,8 +104,10 @@ type DateFilter = "today" | "yesterday" | "15days" | "30days" | "custom";
 type ExpenseTypeFilter = "all" | "fixed" | "variable";
 
 export default function ExpensesPage() {
-  const [expenses, setExpenses] = useState(initialExpenses);
+  const [expenses, setExpenses] = useState<Expense[]>(initialExpenses);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [dateFilter, setDateFilter] = useState<DateFilter>("30days");
   const [typeFilter, setTypeFilter] = useState<ExpenseTypeFilter>("all");
   const [currentPage, setCurrentPage] = useState(1);
@@ -121,7 +123,26 @@ export default function ExpensesPage() {
     type: "variable" as "fixed" | "variable",
   });
 
-  const today = new Date("2026-01-15");
+  const today = new Date();
+
+  const loadExpenses = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("expenses")
+      .select("*")
+      .order("expense_date", { ascending: false });
+    if (error) { toast.error(error.message); return; }
+    setExpenses((data ?? []).map((e: any) => ({
+      id: e.id,
+      description: e.description,
+      category: e.category,
+      date: e.expense_date,
+      amount: Number(e.amount),
+      paymentMethod: e.payment_method ?? "",
+      type: e.type,
+    })));
+  }, []);
+
+  useEffect(() => { loadExpenses(); }, [loadExpenses]);
 
   // Filtrar por fecha
   const dateFilteredExpenses = useMemo(() => {
