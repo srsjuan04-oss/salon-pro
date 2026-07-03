@@ -239,10 +239,26 @@ export default function ExpensesPage() {
     });
   };
 
-  const handleSubmit = () => {
-    console.log("Nuevo gasto:", formData);
+  const handleSubmit = async () => {
+    if (!formData.description || !formData.category || !formData.amount) {
+      toast.error("Completa todos los campos"); return;
+    }
+    const { data: userData } = await supabase.auth.getUser();
+    const { error } = await supabase.from("expenses").insert({
+      description: formData.description,
+      category: formData.category,
+      expense_date: format(new Date(), "yyyy-MM-dd"),
+      amount: parseFloat(formData.amount),
+      payment_method: formData.paymentMethod || null,
+      type: formData.type,
+      source: "manual",
+      created_by: userData.user?.id,
+    });
+    if (error) { toast.error(error.message); return; }
+    toast.success("Gasto registrado");
     setFormData({ description: "", category: "", amount: "", paymentMethod: "", type: "variable" });
     setIsDialogOpen(false);
+    loadExpenses();
   };
 
   const getDateRangeLabel = () => {
