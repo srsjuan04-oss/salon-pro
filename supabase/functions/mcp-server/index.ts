@@ -37,22 +37,51 @@ const ok = (data: unknown) => ({
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+function normalize(s: string): string {
+  return s.toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ").trim();
+}
+
+const STOPWORDS = new Set(["de", "del", "la", "el", "los", "las", "y", "e", "con", "sin", "para"]);
+
+function fuzzyMatch<T extends { id: string; name: string }>(items: T[], value: string): T | undefined {
+  const target = normalize(value);
+  if (!target) return undefined;
+  // exact normalized match
+  let hit = items.find(i => normalize(i.name) === target);
+  if (hit) return hit;
+  // contains
+  hit = items.find(i => normalize(i.name).includes(target) || target.includes(normalize(i.name)));
+  if (hit) return hit;
+  // token overlap
+  const targetTokens = target.split(" ").filter(t => t && !STOPWORDS.has(t));
+  let best: { item: T; score: number } | undefined;
+  for (const item of items) {
+    const itemTokens = normalize(item.name).split(" ").filter(t => t && !STOPWORDS.has(t));
+    const score = targetTokens.filter(t => itemTokens.some(it => it.includes(t) || t.includes(it))).length;
+    if (score > 0 && (!best || score > best.score)) best = { item, score };
+  }
+  return best?.item;
+}
+
 async function resolveBarberId(value?: string): Promise<string | undefined> {
   if (!value) return undefined;
   if (UUID_RE.test(value)) return value;
-  const { data } = await supabase
-    .from("barbers").select("id, name").eq("is_active", true).ilike("name", `%${value}%`).limit(1).maybeSingle();
-  if (!data) throw new Error(`Barbero no encontrado: "${value}"`);
-  return data.id;
+  const { data } = await supabase.from("barbers").select("id, name").eq("is_active", true);
+  const hit = fuzzyMatch(data ?? [], value);
+  if (!hit) throw new Error(`Barbero no encontrado: "${value}". Disponibles: ${(data ?? []).map(b => b.name).join(", ")}`);
+  return hit.id;
 }
 
 async function resolveServiceId(value?: string): Promise<string | undefined> {
   if (!value) return undefined;
   if (UUID_RE.test(value)) return value;
-  const { data } = await supabase
-    .from("services").select("id, name").eq("is_active", true).ilike("name", `%${value}%`).limit(1).maybeSingle();
-  if (!data) throw new Error(`Servicio no encontrado: "${value}"`);
-  return data.id;
+  const { data } = await supabase.from("services").select("id, name").eq("is_active", true);
+  const hit = fuzzyMatch(data ?? [], value);
+  if (!hit) throw new Error(`Servicio no encontrado: "${value}". Disponibles: ${(data ?? []).map(s => s.name).join(", ")}`);
+  return hit.id;
 }
 
 // ===== Tools =====
