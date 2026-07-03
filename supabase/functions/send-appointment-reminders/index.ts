@@ -69,6 +69,13 @@ Deno.serve(async (req) => {
     const now = new Date();
     const tenMinAgo = new Date(now.getTime() - 10 * 60 * 1000);
 
+    // Load active reminder settings — inactive types must NOT send
+    const { data: activeSettings } = await supabase
+      .from("reminder_settings")
+      .select("reminder_type, whapify_flow_id, active")
+      .eq("active", true);
+    const activeTypes = new Set((activeSettings ?? []).map((s: any) => s.reminder_type));
+
     const { data: reminders, error } = await supabase
       .from("appointment_reminders")
       .select(`
@@ -89,6 +96,10 @@ Deno.serve(async (req) => {
       const appt = (rem as any).appointment;
       if (!appt || appt.status === "cancelled") {
         await supabase.from("appointment_reminders").update({ status: "cancelled", error_message: "Cita cancelada o inexistente" }).eq("id", rem.id);
+        continue;
+      }
+      if (!activeTypes.has(rem.reminder_type)) {
+        await supabase.from("appointment_reminders").update({ status: "cancelled", error_message: "Recordatorio desactivado en configuración" }).eq("id", rem.id);
         continue;
       }
       if (!rem.whapify_flow_id || !rem.customer_phone) {
