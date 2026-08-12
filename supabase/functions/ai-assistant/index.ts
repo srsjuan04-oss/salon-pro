@@ -340,12 +340,14 @@ ${conversation_context ? `CONTEXTO DE LA CONVERSACIÓN:\n${conversation_context}
     if (cancelMatch && customer) {
       const cancelData = cancelMatch[1];
       const fechaMatch = cancelData.match(/fecha:\s*(\d{4}-\d{2}-\d{2})/i);
+      const motivoMatch = cancelData.match(/motivo:\s*(.+)/i);
 
       if (fechaMatch) {
         const date = fechaMatch[1];
+        const reason = motivoMatch ? motivoMatch[1].trim() : "No especificado por el cliente";
         const { data: cancelled, error: cancelError } = await supabase
           .from("appointments")
-          .update({ status: "cancelled" })
+          .update({ status: "cancelled", cancellation_reason: reason })
           .eq("customer_id", customer.id)
           .eq("appointment_date", date)
           .neq("status", "cancelled")
@@ -354,6 +356,13 @@ ${conversation_context ? `CONTEXTO DE LA CONVERSACIÓN:\n${conversation_context}
 
         if (cancelled && !cancelError) {
           action = { type: "booking_cancelled", appointment: cancelled };
+          await supabase.from("customer_notes").insert({
+            customer_id: customer.id,
+            organization_id: customer.organization_id,
+            note_type: "cancellation",
+            source: "whatsapp",
+            content: `Canceló la cita del ${date}. Motivo: ${reason}`,
+          });
           cleanResponse = `✅ Tu cita del ${date} ha sido cancelada. Si deseas reagendar, estoy aquí para ayudarte. 📅`;
         } else {
           cleanResponse = `No encontré una cita activa para esa fecha. ¿Podrías verificar la fecha?`;
