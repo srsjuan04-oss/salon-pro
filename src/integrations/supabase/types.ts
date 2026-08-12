@@ -765,6 +765,7 @@ export type Database = {
       }
       services: {
         Row: {
+          benefits: string | null
           created_at: string
           description: string | null
           duration_minutes: number
@@ -775,6 +776,7 @@ export type Database = {
           price: number
         }
         Insert: {
+          benefits?: string | null
           created_at?: string
           description?: string | null
           duration_minutes?: number
@@ -785,6 +787,7 @@ export type Database = {
           price?: number
         }
         Update: {
+          benefits?: string | null
           created_at?: string
           description?: string | null
           duration_minutes?: number

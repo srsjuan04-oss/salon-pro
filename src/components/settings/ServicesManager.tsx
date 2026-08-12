@@ -16,6 +16,7 @@ type Service = {
   id: string;
   name: string;
   description: string | null;
+  benefits: string | null;
   duration_minutes: number;
   price: number;
   is_active: boolean;
@@ -25,6 +26,7 @@ type FormState = {
   id?: string;
   name: string;
   description: string;
+  benefits: string;
   duration_minutes: number;
   price: number;
   is_active: boolean;
@@ -33,6 +35,7 @@ type FormState = {
 const empty: FormState = {
   name: "",
   description: "",
+  benefits: "",
   duration_minutes: 30,
   price: 0,
   is_active: true,
@@ -60,6 +63,7 @@ export function ServicesManager() {
       const payload = {
         name: f.name,
         description: f.description || null,
+        benefits: f.benefits || null,
         duration_minutes: Number(f.duration_minutes),
         price: Number(f.price),
         is_active: f.is_active,
@@ -99,6 +103,7 @@ export function ServicesManager() {
       id: s.id,
       name: s.name,
       description: s.description ?? "",
+      benefits: s.benefits ?? "",
       duration_minutes: s.duration_minutes,
       price: Number(s.price),
       is_active: s.is_active,
@@ -131,6 +136,17 @@ export function ServicesManager() {
               <div className="space-y-2">
                 <Label>Descripción</Label>
                 <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Detalles del servicio" />
+              </div>
+              <div className="space-y-2">
+                <Label>Beneficios</Label>
+                <Textarea
+                  value={form.benefits}
+                  onChange={(e) => setForm({ ...form, benefits: e.target.value })}
+                  placeholder="Ej: Deja el cabello hidratado, incluye masaje capilar y peinado final"
+                />
+                <p className="text-xs text-muted-foreground">
+                  El asistente de IA usa este texto para explicar el servicio al cliente.
+                </p>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -181,6 +197,7 @@ export function ServicesManager() {
                   )}
                 </div>
                 {s.description && <p className="text-sm text-muted-foreground">{s.description}</p>}
+                {s.benefits && <p className="text-xs text-primary mt-0.5">Beneficios: {s.benefits}</p>}
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {s.duration_minutes} min · ${Number(s.price).toLocaleString()}
                 </p>
