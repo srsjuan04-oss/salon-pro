@@ -18,11 +18,16 @@ const corsHeaders = {
   "Access-Control-Expose-Headers": "mcp-session-id",
 };
 
-// Per-request org context (set by auth middleware before tool handlers run)
-let CURRENT_ORG: string | null = null;
+// Per-request org context. Uses AsyncLocalStorage so concurrent MCP requests
+// never overwrite each other's organization (a module-level variable made
+// create_appointment insert a null organization_id under concurrency).
+import { AsyncLocalStorage } from "node:async_hooks";
+
+const orgStore = new AsyncLocalStorage<{ org: string }>();
 const requireOrg = () => {
-  if (!CURRENT_ORG) throw new Error("Sin organización asociada al token MCP.");
-  return CURRENT_ORG;
+  const org = orgStore.getStore()?.org;
+  if (!org) throw new Error("Sin organización asociada al token MCP.");
+  return org;
 };
 
 const mcp = new McpServer({
