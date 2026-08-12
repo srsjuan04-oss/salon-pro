@@ -23,7 +23,7 @@ import { CsvImportDialog } from "@/components/financial/CsvImportDialog";
 import { ImportHistoryDialog } from "@/components/financial/ImportHistoryDialog";
 import { toast } from "sonner";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
-import { format, subDays, isWithinInterval, parseISO, startOfDay, endOfDay } from "date-fns";
+import { format, subDays, subMonths, isWithinInterval, parseISO, startOfDay, endOfDay } from "date-fns";
 import { es } from "date-fns/locale";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import {
@@ -52,22 +52,8 @@ import { cn } from "@/lib/utils";
 
 const ITEMS_PER_PAGE = 10;
 
-const monthlyData = [
-  { name: "Ene", pagadas: 24000, pendientes: 4000 },
-  { name: "Feb", pagadas: 28000, pendientes: 4000 },
-  { name: "Mar", pagadas: 25000, pendientes: 4000 },
-  { name: "Abr", pagadas: 31000, pendientes: 4000 },
-  { name: "May", pagadas: 34000, pendientes: 4000 },
-  { name: "Jun", pagadas: 38000, pendientes: 4850 },
-];
 
-const serviceData = [
-  { name: "Corte", value: 12500 },
-  { name: "Coloración", value: 18000 },
-  { name: "Manicure", value: 8500 },
-  { name: "Tratamientos", value: 15000 },
-  { name: "Barba", value: 6000 },
-];
+
 
 const services = [
   { name: "Corte de cabello", price: 250 },
@@ -242,6 +228,40 @@ export default function SalesPage() {
   const totalPaid = paidSales.reduce((acc, s) => acc + s.amount, 0);
   const totalPending = pendingSales.reduce((acc, s) => acc + s.amount, 0);
   const totalSales = totalPaid + totalPending;
+
+  // Ingresos mensuales (últimos 6 meses, sobre todas las ventas cargadas)
+  const monthlyData = useMemo(() => {
+    const months: { key: string; name: string; pagadas: number; pendientes: number }[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = subMonths(today, i);
+      months.push({
+        key: format(d, "yyyy-MM"),
+        name: format(d, "MMM", { locale: es }),
+        pagadas: 0,
+        pendientes: 0,
+      });
+    }
+    sales.forEach((s) => {
+      const m = months.find((x) => x.key === (s.date ?? "").slice(0, 7));
+      if (!m) return;
+      if (s.status === "paid") m.pagadas += s.amount;
+      else m.pendientes += s.amount;
+    });
+    return months.map(({ name, pagadas, pendientes }) => ({ name, pagadas, pendientes }));
+  }, [sales]);
+
+  // Ingresos por servicio (según el filtro de fecha activo)
+  const serviceData = useMemo(() => {
+    const totals = new Map<string, number>();
+    dateFilteredSales.forEach((s) => {
+      totals.set(s.service, (totals.get(s.service) ?? 0) + s.amount);
+    });
+    return Array.from(totals, ([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 6);
+  }, [dateFilteredSales]);
+
+
 
   const handleServiceChange = (serviceName: string) => {
     const service = services.find(s => s.name === serviceName);
