@@ -18,11 +18,16 @@ const corsHeaders = {
   "Access-Control-Expose-Headers": "mcp-session-id",
 };
 
-// Per-request org context (set by auth middleware before tool handlers run)
-let CURRENT_ORG: string | null = null;
+// Per-request org context. Uses AsyncLocalStorage so concurrent MCP requests
+// never overwrite each other's organization (a module-level variable made
+// create_appointment insert a null organization_id under concurrency).
+import { AsyncLocalStorage } from "node:async_hooks";
+
+const orgStore = new AsyncLocalStorage<{ org: string }>();
 const requireOrg = () => {
-  if (!CURRENT_ORG) throw new Error("Sin organización asociada al token MCP.");
-  return CURRENT_ORG;
+  const org = orgStore.getStore()?.org;
+  if (!org) throw new Error("Sin organización asociada al token MCP.");
+  return org;
 };
 
 const mcp = new McpServer({
@@ -360,20 +365,21 @@ app.use("*", async (c, next) => {
       { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
   // Legacy shared token → fall back to first org (backwards compatibility)
+  let org: string | null = null;
   if (LEGACY_TOKEN && token === LEGACY_TOKEN) {
     const { data } = await supabase.from("organizations").select("id")
       .order("created_at", { ascending: true }).limit(1).maybeSingle();
-    CURRENT_ORG = data?.id ?? null;
+    org = data?.id ?? null;
   } else {
     const { data } = await supabase.from("organizations").select("id")
       .eq("mcp_token", token).maybeSingle();
-    CURRENT_ORG = data?.id ?? null;
+    org = data?.id ?? null;
   }
-  if (!CURRENT_ORG) {
+  if (!org) {
     return new Response(JSON.stringify({ error: "Token MCP inválido" }),
       { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
-  await next();
+  await orgStore.run({ org }, () => next());
   for (const [k, v] of Object.entries(corsHeaders)) c.res.headers.set(k, v);
 });
 
