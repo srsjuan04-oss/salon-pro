@@ -226,8 +226,14 @@ mcp.tool("create_appointment", {
           customerId = created.id;
         }
       }
+      const todayBogota = new Date(Date.now() - 5 * 3600 * 1000).toISOString().slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(args.appointment_date))
+        throw new Error("appointment_date debe tener formato YYYY-MM-DD.");
+      if (args.appointment_date < todayBogota)
+        throw new Error(`Fecha en el pasado (${args.appointment_date}). Hoy es ${todayBogota}; verifica el año y vuelve a enviar la fecha correcta.`);
       const barberId = await resolveBarberId(args.barber_id);
       const serviceId = await resolveServiceId(args.service_id);
+
       const { data: svc, error: se } = await supabase.from("services")
         .select("duration_minutes").eq("id", serviceId!).single();
       if (se) throw new Error(se.message);
