@@ -823,11 +823,22 @@ export default function CalendarPage() {
                 </div>
               )}
 
+              {(selectedAppointment as any).cancellation_reason && (
+                <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+                  <p className="text-xs text-muted-foreground mb-1">Motivo de cancelación</p>
+                  <p className="text-sm">{(selectedAppointment as any).cancellation_reason}</p>
+                </div>
+              )}
+
               {selectedAppointment.status !== "cancelled" && selectedAppointment.status !== "completed" && (
                 <DialogFooter className="gap-2">
                   <Button
                     variant="destructive"
-                    onClick={() => handleStatusChange(selectedAppointment.id, "cancelled")}
+                    onClick={() => {
+                      setCancelPreset("");
+                      setCancelReason("");
+                      setIsCancelOpen(true);
+                    }}
                     disabled={updateAppointment.isPending}
                   >
                     Cancelar Cita
@@ -845,6 +856,50 @@ export default function CalendarPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Cancel reason dialog */}
+      <Dialog open={isCancelOpen} onOpenChange={setIsCancelOpen}>
+        <DialogContent className="sm:max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle>Motivo de la cancelación</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Motivo</Label>
+              <Select value={cancelPreset} onValueChange={setCancelPreset}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona un motivo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CANCEL_REASONS.map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {r}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Detalle {cancelPreset === "Otro" || !cancelPreset ? "(obligatorio)" : "(opcional)"}</Label>
+              <Textarea
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="Describe brevemente el motivo..."
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setIsCancelOpen(false)}>
+              Volver
+            </Button>
+            <Button variant="destructive" onClick={handleConfirmCancel}>
+              Confirmar cancelación
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </DashboardLayout>
   );
 }
