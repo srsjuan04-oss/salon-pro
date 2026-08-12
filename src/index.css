@@ -105,6 +105,10 @@
     @apply border-border;
   }
 
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
     font-family: 'Plus Jakarta Sans', sans-serif;
@@ -112,6 +116,37 @@
 
   h1, h2, h3, h4, h5, h6 {
     @apply font-semibold tracking-tight;
+  }
+
+  /* Mobile ergonomics */
+  @media (max-width: 767px) {
+    /* Prevent iOS zoom on focus */
+    input,
+    select,
+    textarea {
+      font-size: 16px;
+    }
+
+    /* Tab bars scroll instead of wrapping/overflowing */
+    [role="tablist"] {
+      overflow-x: auto;
+      justify-content: flex-start;
+      scrollbar-width: none;
+    }
+
+    [role="tablist"]::-webkit-scrollbar {
+      display: none;
+    }
+
+    [role="tablist"] > * {
+      flex: 0 0 auto;
+    }
+
+    /* Dialogs fit the viewport and can scroll */
+    [role="dialog"] {
+      max-height: 90dvh;
+      overflow-y: auto;
+    }
   }
 }
 
