@@ -83,11 +83,11 @@ async function resolveServiceId(value?: string): Promise<string | undefined> {
 }
 
 mcp.tool("list_services", {
-  description: "Lista los servicios activos.",
+  description: "Lista los servicios activos con su descripción, beneficios, duración y precio.",
   inputSchema: z.object({}),
   handler: async () => {
     const { data, error } = await supabase.from("services")
-      .select("id, name, description, duration_minutes, price")
+      .select("id, name, description, benefits, duration_minutes, price")
       .eq("is_active", true).eq("organization_id", requireOrg());
     if (error) throw new Error(error.message);
     return ok(data);
