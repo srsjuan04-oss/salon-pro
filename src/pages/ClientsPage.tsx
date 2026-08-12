@@ -254,9 +254,21 @@ export default function ClientsPage() {
     return sampleAppointmentChanges.filter(change => change.clientId === clientId);
   };
 
-  const handleOpenHistory = (client: Client) => {
+  const [clientNotes, setClientNotes] = useState<any[]>([]);
+  const [loadingNotes, setLoadingNotes] = useState(false);
+
+  const handleOpenHistory = async (client: Client) => {
     setSelectedClient(client);
     setHistoryDialogOpen(true);
+    setLoadingNotes(true);
+    setClientNotes([]);
+    const { data } = await supabase
+      .from("customer_notes" as any)
+      .select("*")
+      .eq("customer_id", client.id)
+      .order("occurred_at", { ascending: false });
+    setClientNotes((data as any[]) ?? []);
+    setLoadingNotes(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
