@@ -292,8 +292,12 @@ mcp.tool("reschedule_appointment", {
       if (!found) throw new Error(`No hay cita activa para ${args.phone} el ${args.original_date}`);
       apptId = found.id;
     }
+    const todayBogota2 = new Date(Date.now() - 5 * 3600 * 1000).toISOString().slice(0, 10);
+    if (args.appointment_date < todayBogota2)
+      throw new Error(`Nueva fecha en el pasado (${args.appointment_date}). Hoy es ${todayBogota2}; verifica el año.`);
     const { data: appt, error: ae } = await supabase.from("appointments")
       .select("service_id, organization_id").eq("id", apptId).single();
+
     if (ae) throw new Error(ae.message);
     if (appt.organization_id !== org) throw new Error("Cita fuera de tu organización.");
     const { data: svc } = await supabase.from("services")
