@@ -306,13 +306,13 @@ export default function CalendarPage() {
             </Button>
           </div>
 
-          <div className="grid grid-cols-7 gap-2">
+          <div className="grid grid-cols-7 gap-1 md:gap-2">
             {weekDays.map((day) => (
               <button
                 key={day.toISOString()}
                 onClick={() => setSelectedDate(day)}
                 className={cn(
-                  "py-3 px-2 rounded-xl text-center transition-all duration-200",
+                  "py-2 px-0.5 md:py-3 md:px-2 rounded-xl text-center transition-all duration-200",
                   isSameDay(day, selectedDate)
                     ? "gradient-gold shadow-gold text-primary-foreground"
                     : isSameDay(day, new Date())
@@ -322,7 +322,7 @@ export default function CalendarPage() {
               >
                 <p
                   className={cn(
-                    "text-xs mb-1",
+                    "text-[10px] md:text-xs mb-1",
                     isSameDay(day, selectedDate)
                       ? "text-primary-foreground/80"
                       : "text-muted-foreground"
@@ -330,10 +330,11 @@ export default function CalendarPage() {
                 >
                   {format(day, "EEE", { locale: es })}
                 </p>
-                <p className="text-lg font-semibold">{format(day, "d")}</p>
+                <p className="text-base md:text-lg font-semibold">{format(day, "d")}</p>
               </button>
             ))}
           </div>
+
         </div>
 
         {/* Calendar Grid */}
