@@ -229,6 +229,40 @@ export default function SalesPage() {
   const totalPending = pendingSales.reduce((acc, s) => acc + s.amount, 0);
   const totalSales = totalPaid + totalPending;
 
+  // Ingresos mensuales (últimos 6 meses, sobre todas las ventas cargadas)
+  const monthlyData = useMemo(() => {
+    const months: { key: string; name: string; pagadas: number; pendientes: number }[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = subMonths(today, i);
+      months.push({
+        key: format(d, "yyyy-MM"),
+        name: format(d, "MMM", { locale: es }),
+        pagadas: 0,
+        pendientes: 0,
+      });
+    }
+    sales.forEach((s) => {
+      const m = months.find((x) => x.key === (s.date ?? "").slice(0, 7));
+      if (!m) return;
+      if (s.status === "paid") m.pagadas += s.amount;
+      else m.pendientes += s.amount;
+    });
+    return months.map(({ name, pagadas, pendientes }) => ({ name, pagadas, pendientes }));
+  }, [sales]);
+
+  // Ingresos por servicio (según el filtro de fecha activo)
+  const serviceData = useMemo(() => {
+    const totals = new Map<string, number>();
+    dateFilteredSales.forEach((s) => {
+      totals.set(s.service, (totals.get(s.service) ?? 0) + s.amount);
+    });
+    return Array.from(totals, ([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 6);
+  }, [dateFilteredSales]);
+
+
+
   const handleServiceChange = (serviceName: string) => {
     const service = services.find(s => s.name === serviceName);
     setFormData({ 
