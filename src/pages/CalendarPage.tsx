@@ -342,8 +342,86 @@ export default function CalendarPage() {
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
           </div>
+        ) : barbers && barbers.length > 0 && isMobile ? (
+          /* Mobile: agenda list ordered by time */
+          <div className="space-y-3">
+            {(appointments ?? []).length === 0 ? (
+              <div className="bg-card rounded-2xl border shadow-soft p-8 text-center">
+                <p className="text-muted-foreground text-sm">
+                  No hay citas para este día.
+                </p>
+              </div>
+            ) : (
+              [...(appointments ?? [])]
+                .sort((a, b) => a.start_time.localeCompare(b.start_time))
+                .map((apt) => {
+                  const barberIndex = barbers.findIndex((b) => b.id === apt.barber_id);
+                  return (
+                    <button
+                      key={apt.id}
+                      onClick={() => {
+                        setSelectedAppointment(apt);
+                        setIsDetailOpen(true);
+                      }}
+                      className={cn(
+                        "w-full text-left bg-card rounded-2xl border shadow-soft p-3 flex gap-3 items-center border-l-4",
+                        apt.status === "cancelled"
+                          ? "border-l-destructive/50 opacity-60"
+                          : apt.status === "completed"
+                          ? "border-l-success/60"
+                          : "border-l-primary/60"
+                      )}
+                    >
+                      <div className="shrink-0 w-16 text-center">
+                        <p className="font-semibold text-sm">{apt.start_time.slice(0, 5)}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {apt.service?.duration_minutes ?? 30} min
+                        </p>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1">
+                          <p className="font-medium text-sm truncate">
+                            {apt.customer?.name || "Cliente"}
+                          </p>
+                          {apt.source === "whatsapp" && (
+                            <MessageSquare className="w-3 h-3 text-green-600 shrink-0" />
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {apt.service?.name}
+                        </p>
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <span
+                            className={cn(
+                              "w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-semibold",
+                              getBarberColor(barberIndex < 0 ? 0 : barberIndex)
+                            )}
+                          >
+                            {apt.barber?.name?.charAt(0) ?? "?"}
+                          </span>
+                          <span className="text-xs text-muted-foreground truncate">
+                            {apt.barber?.name}
+                          </span>
+                        </div>
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className="shrink-0 text-[10px] capitalize"
+                      >
+                        {apt.status === "completed"
+                          ? "Completada"
+                          : apt.status === "cancelled"
+                          ? "Cancelada"
+                          : "Pendiente"}
+                      </Badge>
+                    </button>
+                  );
+                })
+            )}
+          </div>
         ) : barbers && barbers.length > 0 ? (
           <div className="bg-card rounded-2xl border shadow-soft overflow-hidden">
+
             {/* Staff Headers */}
             <div
               className="grid border-b border-border"
