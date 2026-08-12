@@ -466,6 +466,34 @@ ${conversation_context ? `CONTEXTO DE LA CONVERSACIÓN:\n${conversation_context}
       cleanResponse = cleanResponse.replace(/\[REAGENDAR_CITA\][\s\S]*?\[\/REAGENDAR_CITA\]/g, "").trim() || cleanResponse;
     }
 
+    // Conversation summary note -> saved into the customer's history
+    const noteMatch = assistantMessage.match(/\[NOTA_CLIENTE\]([\s\S]*?)\[\/NOTA_CLIENTE\]/);
+    if (noteMatch) {
+      const resumenMatch = noteMatch[1].match(/resumen:\s*([\s\S]+)/i);
+      const summary = (resumenMatch ? resumenMatch[1] : noteMatch[1]).trim();
+      // Resolve the customer (it may have been created during this conversation)
+      let noteCustomer = customer;
+      if (!noteCustomer) {
+        const { data: c } = await supabase
+          .from("customers").select("id, organization_id")
+          .eq("phone", phone_number).maybeSingle();
+        noteCustomer = c as any;
+      }
+      if (noteCustomer && summary) {
+        const { error: noteError } = await supabase.from("customer_notes").insert({
+          customer_id: noteCustomer.id,
+          organization_id: noteCustomer.organization_id,
+          content: summary,
+          note_type: "chat_summary",
+          source: "whatsapp",
+        });
+        if (noteError) console.error("Error saving customer note:", noteError);
+      }
+      cleanResponse = cleanResponse
+        .replace(/\[NOTA_CLIENTE\][\s\S]*?\[\/NOTA_CLIENTE\]/g, "").trim() || cleanResponse;
+    }
+
+
     return new Response(
       JSON.stringify({ response: cleanResponse, action }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
