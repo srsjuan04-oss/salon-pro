@@ -57,6 +57,9 @@ export default function CalendarPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
+  const [isCancelOpen, setIsCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelPreset, setCancelPreset] = useState("");
   
   const queryClient = useQueryClient();
   const formattedDate = format(selectedDate, "yyyy-MM-dd");
