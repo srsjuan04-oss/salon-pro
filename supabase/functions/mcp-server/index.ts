@@ -318,13 +318,82 @@ mcp.tool("reschedule_appointment", {
 });
 
 mcp.tool("cancel_appointment", {
-  description: "Cancela una cita.",
-  inputSchema: z.object({ appointment_id: z.string() }),
-  handler: async ({ appointment_id }) => {
+  description: "Cancela una cita. SIEMPRE pregunta al cliente el motivo y envíalo en 'reason'.",
+  inputSchema: z.object({
+    appointment_id: z.string(),
+    reason: z.string().min(3, "Indica el motivo de la cancelación"),
+  }),
+  handler: async ({ appointment_id, reason }) => {
     const org = requireOrg();
     const { data, error } = await supabase.from("appointments")
-      .update({ status: "cancelled" }).eq("id", appointment_id)
-      .eq("organization_id", org).select().single();
+      .update({ status: "cancelled", cancellation_reason: reason })
+      .eq("id", appointment_id)
+      .eq("organization_id", org).select("*, customer_id").single();
+    if (error) throw new Error(error.message);
+    if (data?.customer_id) {
+      await supabase.from("customer_notes").insert({
+        customer_id: data.customer_id,
+        organization_id: org,
+        note_type: "cancellation",
+        source: "ai",
+        content: `Canceló la cita del ${data.appointment_date} a las ${String(data.start_time).slice(0, 5)}. Motivo: ${reason}`,
+      });
+    }
+    return ok(data);
+  },
+});
+
+mcp.tool("log_customer_note", {
+  description:
+    "Registra en el historial del cliente un resumen de la conversación. Úsalo SIEMPRE al finalizar el chat: incluye qué pidió el cliente, qué se le respondió y el resultado.",
+  inputSchema: z.object({
+    customer_id: z.string().optional(),
+    phone: z.string().optional(),
+    summary: z.string().min(5),
+    note_type: z.string().optional(),
+  }),
+  handler: async ({ customer_id, phone, summary, note_type }) => {
+    const org = requireOrg();
+    let cid = customer_id;
+    if (!cid && phone) {
+      const tail = phone.replace(/\D/g, "").slice(-10);
+      const { data: cust } = await supabase.from("customers").select("id")
+        .eq("organization_id", org)
+        .or(`phone.ilike.%${tail}%,whatsapp_id.ilike.%${tail}%`).limit(1).maybeSingle();
+      cid = cust?.id;
+    }
+    if (!cid) throw new Error("Cliente no encontrado: envía customer_id o phone válido.");
+    const { data, error } = await supabase.from("customer_notes").insert({
+      customer_id: cid, organization_id: org, content: summary,
+      note_type: note_type ?? "chat_summary", source: "ai",
+    }).select().single();
+    if (error) throw new Error(error.message);
+    return ok(data);
+  },
+});
+
+mcp.tool("list_customer_notes", {
+  description: "Lista las notas/resúmenes de conversaciones previas de un cliente (por phone o customer_id).",
+  inputSchema: z.object({
+    customer_id: z.string().optional(),
+    phone: z.string().optional(),
+    limit: z.number().optional(),
+  }),
+  handler: async ({ customer_id, phone, limit }) => {
+    const org = requireOrg();
+    let cid = customer_id;
+    if (!cid && phone) {
+      const tail = phone.replace(/\D/g, "").slice(-10);
+      const { data: cust } = await supabase.from("customers").select("id")
+        .eq("organization_id", org)
+        .or(`phone.ilike.%${tail}%,whatsapp_id.ilike.%${tail}%`).limit(1).maybeSingle();
+      cid = cust?.id;
+    }
+    if (!cid) return ok([]);
+    const { data, error } = await supabase.from("customer_notes")
+      .select("id, content, note_type, source, occurred_at")
+      .eq("customer_id", cid).eq("organization_id", org)
+      .order("occurred_at", { ascending: false }).limit(limit ?? 10);
     if (error) throw new Error(error.message);
     return ok(data);
   },
