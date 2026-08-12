@@ -52,22 +52,8 @@ import { cn } from "@/lib/utils";
 
 const ITEMS_PER_PAGE = 10;
 
-const monthlyData = [
-  { name: "Ene", pagadas: 24000, pendientes: 4000 },
-  { name: "Feb", pagadas: 28000, pendientes: 4000 },
-  { name: "Mar", pagadas: 25000, pendientes: 4000 },
-  { name: "Abr", pagadas: 31000, pendientes: 4000 },
-  { name: "May", pagadas: 34000, pendientes: 4000 },
-  { name: "Jun", pagadas: 38000, pendientes: 4850 },
-];
 
-const serviceData = [
-  { name: "Corte", value: 12500 },
-  { name: "Coloración", value: 18000 },
-  { name: "Manicure", value: 8500 },
-  { name: "Tratamientos", value: 15000 },
-  { name: "Barba", value: 6000 },
-];
+
 
 const services = [
   { name: "Corte de cabello", price: 250 },
