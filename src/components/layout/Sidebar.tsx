@@ -29,9 +29,15 @@ const menuItems = [
   { icon: Settings, label: "Configuración", path: "/settings", adminOnly: true },
 ];
 
+interface SidebarProps {
+  /** Renders the mobile variant: always expanded, no collapse button */
+  mobile?: boolean;
+  onNavigate?: () => void;
+}
 
-export function Sidebar() {
-  const [collapsed, setCollapsed] = useState(false);
+export function Sidebar({ mobile = false, onNavigate }: SidebarProps) {
+  const [collapsedState, setCollapsed] = useState(false);
+  const collapsed = mobile ? false : collapsedState;
   const location = useLocation();
   const { user, signOut, isAdmin } = useAuth();
 
@@ -44,8 +50,8 @@ export function Sidebar() {
   return (
     <aside 
       className={cn(
-        "gradient-dark h-screen flex flex-col transition-all duration-300 ease-in-out",
-        collapsed ? "w-20" : "w-64"
+        "gradient-dark h-full flex flex-col transition-all duration-300 ease-in-out",
+        mobile ? "w-full" : collapsed ? "w-20" : "w-64"
       )}
     >
       {/* Logo */}
@@ -62,13 +68,14 @@ export function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {visibleMenuItems.map((item) => {
           const isActive = location.pathname === item.path;
           return (
             <Link
               key={item.path}
               to={item.path}
+              onClick={onNavigate}
               className={cn(
                 "flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200",
                 "hover:bg-sidebar-accent group",
@@ -78,7 +85,7 @@ export function Sidebar() {
               )}
             >
               <item.icon className={cn(
-                "w-5 h-5 transition-transform duration-200",
+                "w-5 h-5 shrink-0 transition-transform duration-200",
                 "group-hover:scale-110",
                 isActive && "text-sidebar-primary"
               )} />
@@ -97,7 +104,7 @@ export function Sidebar() {
       {!collapsed && user && (
         <div className="px-4 py-3 border-t border-sidebar-border/20">
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-8 h-8 rounded-full bg-sidebar-accent flex items-center justify-center">
+            <div className="w-8 h-8 rounded-full bg-sidebar-accent flex items-center justify-center shrink-0">
               <UserCircle className="w-5 h-5 text-sidebar-foreground/70" />
             </div>
             <div className="flex-1 min-w-0">
@@ -132,20 +139,22 @@ export function Sidebar() {
         </div>
       )}
 
-      {/* Collapse Button */}
-      <button
-        onClick={() => setCollapsed(!collapsed)}
-        className="m-4 p-3 rounded-xl bg-sidebar-accent text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors"
-      >
-        {collapsed ? (
-          <ChevronRight className="w-5 h-5 mx-auto" />
-        ) : (
-          <div className="flex items-center gap-2">
-            <ChevronLeft className="w-5 h-5" />
-            <span className="text-sm">Colapsar</span>
-          </div>
-        )}
-      </button>
+      {/* Collapse Button (desktop only) */}
+      {!mobile && (
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="m-4 p-3 rounded-xl bg-sidebar-accent text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors"
+        >
+          {collapsed ? (
+            <ChevronRight className="w-5 h-5 mx-auto" />
+          ) : (
+            <div className="flex items-center gap-2">
+              <ChevronLeft className="w-5 h-5" />
+              <span className="text-sm">Colapsar</span>
+            </div>
+          )}
+        </button>
+      )}
     </aside>
   );
 }

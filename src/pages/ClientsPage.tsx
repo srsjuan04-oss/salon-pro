@@ -319,7 +319,7 @@ export default function ClientsPage() {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold">Clientes</h1>
+            <h1 className="text-2xl md:text-3xl font-bold">Clientes</h1>
             <p className="text-muted-foreground mt-1">
               Gestiona tu base de clientes • {clients.length} clientes totales
             </p>

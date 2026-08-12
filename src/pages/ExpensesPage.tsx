@@ -287,7 +287,7 @@ export default function ExpensesPage() {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold">Gastos</h1>
+            <h1 className="text-2xl md:text-3xl font-bold">Gastos</h1>
             <p className="text-muted-foreground mt-1">
               Control de gastos fijos y variables del negocio
             </p>
@@ -456,7 +456,7 @@ export default function ExpensesPage() {
               </div>
               <div className="mt-4">
                 <p className="text-sm text-muted-foreground">Promedio Diario</p>
-                <p className="text-3xl font-bold">
+                <p className="text-2xl md:text-3xl font-bold">
                   ${dateFilter === "today" || dateFilter === "yesterday" 
                     ? totalExpenses.toLocaleString()
                     : Math.round(totalExpenses / (dateFilter === "15days" ? 15 : 30)).toLocaleString()
