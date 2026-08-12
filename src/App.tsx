@@ -9,6 +9,7 @@ import AuthPage from "./pages/AuthPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 
 import CalendarPage from "./pages/CalendarPage";
+import AppointmentsHistoryPage from "./pages/AppointmentsHistoryPage";
 import ClientsPage from "./pages/ClientsPage";
 import StaffPage from "./pages/StaffPage";
 import SalesPage from "./pages/SalesPage";
