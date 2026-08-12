@@ -659,13 +659,25 @@ export default function ClientsPage() {
                 </div>
               )}
 
-              <div className="pt-4 border-t border-border flex items-center justify-between">
+              <div className="pt-4 border-t border-border flex items-center justify-between gap-2">
                 <div>
                   <p className="text-xs text-muted-foreground">Total gastado</p>
                   <p className="text-lg font-bold text-primary">${client.totalSpent.toLocaleString()}</p>
                 </div>
-                <Button variant="outline" size="sm">Agendar Cita</Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="gap-1"
+                    onClick={() => handleOpenHistory(client)}
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                    Resumen IA
+                  </Button>
+                  <Button variant="outline" size="sm">Agendar Cita</Button>
+                </div>
               </div>
+
             </div>
           ))}
         </div>
@@ -958,12 +970,15 @@ export default function ClientsPage() {
                         <div key={note.id} className="p-3 rounded-lg border bg-secondary/30">
                           <div className="flex items-center justify-between mb-1">
                             <Badge variant="outline" className="text-xs">
-                              {note.note_type === "cancellation"
-                                ? "Cancelación"
-                                : note.note_type === "chat_summary"
-                                ? "Resumen de chat"
-                                : note.note_type}
+                              {{
+                                cancellation: "Cancelación",
+                                cancelacion: "Cancelación",
+                                chat_summary: "Resumen de chat",
+                                appointment_created: "Cita agendada",
+                                appointment_rescheduled: "Cita reagendada",
+                              }[note.note_type as string] ?? "Nota"}
                             </Badge>
+
                             <span className="text-xs text-muted-foreground">
                               {new Date(note.occurred_at).toLocaleString("es-ES", {
                                 day: "numeric",
