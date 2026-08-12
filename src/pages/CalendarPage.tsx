@@ -209,6 +209,45 @@ export default function CalendarPage() {
     }
   };
 
+  const CANCEL_REASONS = [
+    "Cliente canceló",
+    "Cliente no asistió",
+    "Reprogramación solicitada",
+    "Barbero no disponible",
+    "Error al agendar",
+    "Otro",
+  ];
+
+  const handleConfirmCancel = async () => {
+    if (!selectedAppointment) return;
+    const reason = cancelPreset === "Otro" || !cancelPreset ? cancelReason.trim() : cancelPreset;
+    if (!reason) {
+      toast.error("Indica el motivo de la cancelación");
+      return;
+    }
+    try {
+      const { error } = await supabase
+        .from("appointments")
+        .update({
+          status: "cancelled",
+          cancellation_reason:
+            cancelPreset && cancelPreset !== "Otro" && cancelReason.trim()
+              ? `${cancelPreset} — ${cancelReason.trim()}`
+              : reason,
+        } as any)
+        .eq("id", selectedAppointment.id);
+      if (error) throw error;
+      queryClient.invalidateQueries({ queryKey: ["appointments"] });
+      toast.success("Cita cancelada");
+      setIsCancelOpen(false);
+      setIsDetailOpen(false);
+      setCancelReason("");
+      setCancelPreset("");
+    } catch (e) {
+      toast.error("Error al cancelar la cita");
+    }
+  };
+
   const isLoading = loadingAppointments || loadingBarbers;
 
   return (
