@@ -85,6 +85,7 @@ export type Database = {
           apple_event_id: string | null
           appointment_date: string
           barber_id: string
+          cancellation_reason: string | null
           created_at: string
           customer_id: string
           end_time: string
@@ -102,6 +103,7 @@ export type Database = {
           apple_event_id?: string | null
           appointment_date: string
           barber_id: string
+          cancellation_reason?: string | null
           created_at?: string
           customer_id: string
           end_time: string
@@ -119,6 +121,7 @@ export type Database = {
           apple_event_id?: string | null
           appointment_date?: string
           barber_id?: string
+          cancellation_reason?: string | null
           created_at?: string
           customer_id?: string
           end_time?: string
@@ -251,6 +254,57 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "barbers_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      customer_notes: {
+        Row: {
+          content: string
+          created_at: string
+          customer_id: string
+          id: string
+          metadata: Json | null
+          note_type: string
+          occurred_at: string
+          organization_id: string
+          source: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          customer_id: string
+          id?: string
+          metadata?: Json | null
+          note_type?: string
+          occurred_at?: string
+          organization_id: string
+          source?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          customer_id?: string
+          id?: string
+          metadata?: Json | null
+          note_type?: string
+          occurred_at?: string
+          organization_id?: string
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_notes_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_notes_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"

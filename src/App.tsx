@@ -9,6 +9,7 @@ import AuthPage from "./pages/AuthPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 
 import CalendarPage from "./pages/CalendarPage";
+import AppointmentsHistoryPage from "./pages/AppointmentsHistoryPage";
 import ClientsPage from "./pages/ClientsPage";
 import StaffPage from "./pages/StaffPage";
 import SalesPage from "./pages/SalesPage";
@@ -32,6 +33,7 @@ const App = () => (
 
           <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
           <Route path="/calendar" element={<ProtectedRoute><CalendarPage /></ProtectedRoute>} />
+          <Route path="/appointments-history" element={<ProtectedRoute><AppointmentsHistoryPage /></ProtectedRoute>} />
           <Route path="/clients" element={<ProtectedRoute><ClientsPage /></ProtectedRoute>} />
           <Route path="/staff" element={<ProtectedRoute><StaffPage /></ProtectedRoute>} />
           <Route path="/sales" element={<ProtectedRoute><SalesPage /></ProtectedRoute>} />

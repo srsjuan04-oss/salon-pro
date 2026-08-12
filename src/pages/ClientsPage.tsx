@@ -254,9 +254,21 @@ export default function ClientsPage() {
     return sampleAppointmentChanges.filter(change => change.clientId === clientId);
   };
 
-  const handleOpenHistory = (client: Client) => {
+  const [clientNotes, setClientNotes] = useState<any[]>([]);
+  const [loadingNotes, setLoadingNotes] = useState(false);
+
+  const handleOpenHistory = async (client: Client) => {
     setSelectedClient(client);
     setHistoryDialogOpen(true);
+    setLoadingNotes(true);
+    setClientNotes([]);
+    const { data } = await supabase
+      .from("customer_notes" as any)
+      .select("*")
+      .eq("customer_id", client.id)
+      .order("occurred_at", { ascending: false });
+    setClientNotes((data as any[]) ?? []);
+    setLoadingNotes(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -926,6 +938,52 @@ export default function ClientsPage() {
                   );
                 })()}
               </ScrollArea>
+
+              {/* Notas de conversaciones (IA) */}
+              <div>
+                <p className="font-semibold text-sm mb-2 flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4 text-primary" />
+                  Conversaciones y notas
+                </p>
+                {loadingNotes ? (
+                  <p className="text-sm text-muted-foreground">Cargando notas...</p>
+                ) : clientNotes.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Aún no hay notas de conversaciones para este cliente
+                  </p>
+                ) : (
+                  <ScrollArea className="h-[200px] pr-4">
+                    <div className="space-y-2">
+                      {clientNotes.map((note) => (
+                        <div key={note.id} className="p-3 rounded-lg border bg-secondary/30">
+                          <div className="flex items-center justify-between mb-1">
+                            <Badge variant="outline" className="text-xs">
+                              {note.note_type === "cancellation"
+                                ? "Cancelación"
+                                : note.note_type === "chat_summary"
+                                ? "Resumen de chat"
+                                : note.note_type}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(note.occurred_at).toLocaleString("es-ES", {
+                                day: "numeric",
+                                month: "short",
+                                year: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </span>
+                          </div>
+                          <p className="text-sm whitespace-pre-line">{note.content}</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Canal: {note.source}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                )}
+              </div>
 
               <DialogFooter>
                 <Button variant="outline" onClick={() => setHistoryDialogOpen(false)}>

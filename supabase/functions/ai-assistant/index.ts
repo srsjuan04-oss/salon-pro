@@ -186,10 +186,16 @@ SOLO usa el formato de reagendar si:
 2. Has verificado disponibilidad del nuevo horario
 3. El cliente ha confirmado el cambio
 
-Si el cliente quiere cancelar una cita, responde con:
+Si el cliente quiere cancelar una cita, PRIMERO pregúntale el motivo de la cancelación y luego responde con:
 [CANCELAR_CITA]
 fecha: <YYYY-MM-DD>
+motivo: <motivo indicado por el cliente>
 [/CANCELAR_CITA]
+
+SIEMPRE que la conversación termine (el cliente se despide, se agenda/cancela/reagenda una cita, o se resuelve su consulta), añade al final de tu respuesta un resumen interno con este formato (el cliente NO lo verá):
+[NOTA_CLIENTE]
+resumen: <2-3 líneas: qué pidió el cliente, qué se le respondió y el resultado>
+[/NOTA_CLIENTE]
 
 ${conversation_context ? `CONTEXTO DE LA CONVERSACIÓN:\n${conversation_context}` : ""}`;
 
@@ -334,12 +340,14 @@ ${conversation_context ? `CONTEXTO DE LA CONVERSACIÓN:\n${conversation_context}
     if (cancelMatch && customer) {
       const cancelData = cancelMatch[1];
       const fechaMatch = cancelData.match(/fecha:\s*(\d{4}-\d{2}-\d{2})/i);
+      const motivoMatch = cancelData.match(/motivo:\s*(.+)/i);
 
       if (fechaMatch) {
         const date = fechaMatch[1];
+        const reason = motivoMatch ? motivoMatch[1].trim() : "No especificado por el cliente";
         const { data: cancelled, error: cancelError } = await supabase
           .from("appointments")
-          .update({ status: "cancelled" })
+          .update({ status: "cancelled", cancellation_reason: reason })
           .eq("customer_id", customer.id)
           .eq("appointment_date", date)
           .neq("status", "cancelled")
@@ -348,6 +356,13 @@ ${conversation_context ? `CONTEXTO DE LA CONVERSACIÓN:\n${conversation_context}
 
         if (cancelled && !cancelError) {
           action = { type: "booking_cancelled", appointment: cancelled };
+          await supabase.from("customer_notes").insert({
+            customer_id: customer.id,
+            organization_id: customer.organization_id,
+            note_type: "cancellation",
+            source: "whatsapp",
+            content: `Canceló la cita del ${date}. Motivo: ${reason}`,
+          });
           cleanResponse = `✅ Tu cita del ${date} ha sido cancelada. Si deseas reagendar, estoy aquí para ayudarte. 📅`;
         } else {
           cleanResponse = `No encontré una cita activa para esa fecha. ¿Podrías verificar la fecha?`;
@@ -450,6 +465,34 @@ ${conversation_context ? `CONTEXTO DE LA CONVERSACIÓN:\n${conversation_context}
 
       cleanResponse = cleanResponse.replace(/\[REAGENDAR_CITA\][\s\S]*?\[\/REAGENDAR_CITA\]/g, "").trim() || cleanResponse;
     }
+
+    // Conversation summary note -> saved into the customer's history
+    const noteMatch = assistantMessage.match(/\[NOTA_CLIENTE\]([\s\S]*?)\[\/NOTA_CLIENTE\]/);
+    if (noteMatch) {
+      const resumenMatch = noteMatch[1].match(/resumen:\s*([\s\S]+)/i);
+      const summary = (resumenMatch ? resumenMatch[1] : noteMatch[1]).trim();
+      // Resolve the customer (it may have been created during this conversation)
+      let noteCustomer = customer;
+      if (!noteCustomer) {
+        const { data: c } = await supabase
+          .from("customers").select("id, organization_id")
+          .eq("phone", phone_number).maybeSingle();
+        noteCustomer = c as any;
+      }
+      if (noteCustomer && summary) {
+        const { error: noteError } = await supabase.from("customer_notes").insert({
+          customer_id: noteCustomer.id,
+          organization_id: noteCustomer.organization_id,
+          content: summary,
+          note_type: "chat_summary",
+          source: "whatsapp",
+        });
+        if (noteError) console.error("Error saving customer note:", noteError);
+      }
+      cleanResponse = cleanResponse
+        .replace(/\[NOTA_CLIENTE\][\s\S]*?\[\/NOTA_CLIENTE\]/g, "").trim() || cleanResponse;
+    }
+
 
     return new Response(
       JSON.stringify({ response: cleanResponse, action }),

@@ -5,6 +5,7 @@ import {
   Calendar, 
   Users, 
   UserCircle, 
+  History,
   DollarSign, 
   Receipt,
   Settings,
@@ -20,6 +21,7 @@ import { Button } from "@/components/ui/button";
 const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/" },
   { icon: Calendar, label: "Calendario", path: "/calendar" },
+  { icon: History, label: "Historial de Citas", path: "/appointments-history" },
   { icon: Users, label: "Clientes", path: "/clients" },
   { icon: UserCircle, label: "Staff", path: "/staff" },
   { icon: DollarSign, label: "Ventas", path: "/sales" },
