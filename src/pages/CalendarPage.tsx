@@ -38,6 +38,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { useScheduleSettings } from "@/hooks/useScheduleSettings";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const HOUR_PX = 80;
 
@@ -61,6 +62,7 @@ export default function CalendarPage() {
   const [cancelReason, setCancelReason] = useState("");
   const [cancelPreset, setCancelPreset] = useState("");
   
+  const isMobile = useIsMobile();
   const queryClient = useQueryClient();
   const formattedDate = format(selectedDate, "yyyy-MM-dd");
   
