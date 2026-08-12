@@ -132,7 +132,7 @@ export default function AutomationPage() {
     <DashboardLayout>
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold">Automatización WhatsApp</h1>
+          <h1 className="text-2xl md:text-3xl font-bold">Automatización WhatsApp</h1>
           <p className="text-muted-foreground">Gestiona plantillas y flujos de notificación</p>
         </div>
 
