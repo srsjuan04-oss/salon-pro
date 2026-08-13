@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const lovableApiKey = Deno.env.get("LOVABLE_API_KEY")!;
+    const anthropicApiKey = Deno.env.get("ANTHROPIC_API_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Fetch business data for context
@@ -199,17 +199,18 @@ resumen: <2-3 líneas: qué pidió el cliente, qué se le respondió y el result
 
 ${conversation_context ? `CONTEXTO DE LA CONVERSACIÓN:\n${conversation_context}` : ""}`;
 
-    // Call Lovable AI
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    // Call Anthropic (Claude) directly
+    const aiResponse = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${lovableApiKey}`,
+        "x-api-key": anthropicApiKey,
+        "anthropic-version": "2023-06-01",
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: "claude-haiku-4-5-20251001",
+        system: systemPrompt,
         messages: [
-          { role: "system", content: systemPrompt },
           { role: "user", content: message },
         ],
         max_tokens: 500,
@@ -219,23 +220,23 @@ ${conversation_context ? `CONTEXTO DE LA CONVERSACIÓN:\n${conversation_context}
 
     if (!aiResponse.ok) {
       const errorText = await aiResponse.text();
-      console.error("AI Gateway error:", aiResponse.status, errorText);
-      
+      console.error("Anthropic API error:", aiResponse.status, errorText);
+
       if (aiResponse.status === 429) {
         return new Response(
-          JSON.stringify({ 
+          JSON.stringify({
             response: "Lo siento, estamos experimentando alta demanda. Por favor intenta de nuevo en unos minutos. 🙏",
             action: null
           }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      
-      throw new Error(`AI Gateway error: ${aiResponse.status}`);
+
+      throw new Error(`Anthropic API error: ${aiResponse.status}`);
     }
 
     const aiData = await aiResponse.json();
-    const assistantMessage = aiData.choices?.[0]?.message?.content || 
+    const assistantMessage = aiData.content?.[0]?.text ||
       "Lo siento, no pude procesar tu mensaje. ¿Podrías intentarlo de nuevo?";
 
     console.log("AI Response:", assistantMessage);
