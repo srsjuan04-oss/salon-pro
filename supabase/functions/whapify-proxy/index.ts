@@ -27,10 +27,30 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "No autorizado" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const callerClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } },
+      auth: { persistSession: false },
+    });
+    const { data: { user }, error: userError } = await callerClient.auth.getUser();
+    if (userError || !user) {
+      return new Response(JSON.stringify({ error: "Sesión inválida" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    const supabase = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+
+    const { data: role } = await supabase
+      .from("user_roles").select("organization_id").eq("user_id", user.id).maybeSingle();
+    if (!role?.organization_id) {
+      return new Response(JSON.stringify({ error: "Sin organización" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    const organizationId = role.organization_id as string;
 
     const body = await req.json().catch(() => ({}));
     const action = body.action as string;
@@ -48,12 +68,17 @@ Deno.serve(async (req) => {
       // Validate
       const v = await whapifyFetch(token, "/accounts/flows");
       const valid = v.ok && Array.isArray(v.data);
-      await supabase.from("whapify_settings").upsert({
+      const { error: upsertError } = await supabase.from("whapify_settings").upsert({
         singleton: true,
+        organization_id: organizationId,
         whapify_token: token,
         is_active: valid,
         last_validated_at: new Date().toISOString(),
       }, { onConflict: "singleton" });
+      if (upsertError) {
+        console.error("whapify_settings upsert error", upsertError);
+        return new Response(JSON.stringify({ error: upsertError.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
       return new Response(JSON.stringify({ success: valid, flows_count: valid ? (v.data as unknown[]).length : 0 }), {
         status: valid ? 200 : 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -79,6 +104,7 @@ Deno.serve(async (req) => {
       const flows = v.data as Array<{ id: string | number; name: string }>;
       const rows = flows.map(f => ({
         flow_id: String(f.id),
+        organization_id: organizationId,
         flow_name: f.name ?? `Flow ${f.id}`,
         is_active: true,
         raw_data: f as unknown as Record<string, unknown>,
