@@ -2,13 +2,14 @@ import { ReactNode, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Sidebar } from "./Sidebar";
-import { Bell, Menu, Search, Scissors, X } from "lucide-react";
+import { Menu, Search, Scissors, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { NotificationsBell } from "./NotificationsBell";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -94,10 +95,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               {searchOpen ? <X className="w-5 h-5" /> : <Search className="w-5 h-5" />}
             </Button>
 
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full" />
-            </Button>
+            <NotificationsBell />
 
             <div className="flex items-center gap-3">
               <Avatar className="w-9 h-9 border-2 border-primary/20">
