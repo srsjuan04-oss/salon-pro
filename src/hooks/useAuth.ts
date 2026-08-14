@@ -8,6 +8,7 @@ export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [role, setRole] = useState<UserRole>(null);
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -24,6 +25,7 @@ export function useAuth() {
           }, 0);
         } else {
           setRole(null);
+          setIsPlatformAdmin(false);
           setLoading(false);
         }
       }
@@ -46,11 +48,10 @@ export function useAuth() {
 
   const fetchUserRole = async (userId: string) => {
     try {
-      const { data, error } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", userId)
-        .maybeSingle();
+      const [{ data, error }, { data: platformAdmin }] = await Promise.all([
+        supabase.from("user_roles").select("role").eq("user_id", userId).maybeSingle(),
+        supabase.rpc("is_platform_admin"),
+      ]);
 
       if (error) {
         console.error("Error fetching role:", error);
@@ -58,9 +59,11 @@ export function useAuth() {
       } else {
         setRole(data?.role as UserRole ?? null);
       }
+      setIsPlatformAdmin(Boolean(platformAdmin));
     } catch (err) {
       console.error("Error fetching role:", err);
       setRole(null);
+      setIsPlatformAdmin(false);
     } finally {
       setLoading(false);
     }
@@ -102,6 +105,7 @@ export function useAuth() {
     isAuthenticated: !!user,
     isAdmin: role === "admin",
     isStaff: role === "staff" || role === "admin",
+    isPlatformAdmin,
     signIn,
     signUp,
     signOut,

@@ -1,18 +1,19 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { 
-  LayoutDashboard, 
-  Calendar, 
-  Users, 
-  UserCircle, 
+import {
+  LayoutDashboard,
+  Calendar,
+  Users,
+  UserCircle,
   History,
-  DollarSign, 
+  DollarSign,
   Receipt,
   Settings,
   Scissors,
   ChevronLeft,
   ChevronRight,
-  LogOut
+  LogOut,
+  Building2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
@@ -27,6 +28,7 @@ const menuItems = [
   { icon: DollarSign, label: "Ventas", path: "/sales" },
   { icon: Receipt, label: "Gastos", path: "/expenses" },
   { icon: Settings, label: "Configuración", path: "/settings", adminOnly: true },
+  { icon: Building2, label: "Empresas", path: "/empresas", platformAdminOnly: true },
 ];
 
 interface SidebarProps {
@@ -39,13 +41,15 @@ export function Sidebar({ mobile = false, onNavigate }: SidebarProps) {
   const [collapsedState, setCollapsed] = useState(false);
   const collapsed = mobile ? false : collapsedState;
   const location = useLocation();
-  const { user, signOut, isAdmin } = useAuth();
+  const { user, signOut, isAdmin, isPlatformAdmin } = useAuth();
 
   const handleLogout = async () => {
     await signOut();
   };
 
-  const visibleMenuItems = menuItems.filter(item => !item.adminOnly || isAdmin);
+  const visibleMenuItems = menuItems.filter(
+    (item) => (!item.adminOnly || isAdmin) && (!item.platformAdminOnly || isPlatformAdmin)
+  );
 
   return (
     <aside 
