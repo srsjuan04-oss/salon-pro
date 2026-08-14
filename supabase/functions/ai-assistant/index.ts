@@ -8,7 +8,9 @@ const corsHeaders = {
 // Precio de claude-haiku-4-5 (el modelo que usa este asistente): $1.00 / $5.00 por millón de tokens.
 const HAIKU_INPUT_PRICE_PER_MTOK = 1.0;
 const HAIKU_OUTPUT_PRICE_PER_MTOK = 5.0;
-const MONTHLY_AI_CAP_USD = 10;
+// Tope por defecto si la organización no tiene uno configurado (ver
+// organizations.ai_monthly_cap_usd, ajustable desde el panel de Empresas).
+const DEFAULT_MONTHLY_AI_CAP_USD = 10;
 
 interface AssistantRequest {
   message: string;
@@ -130,15 +132,23 @@ Deno.serve(async (req) => {
       monthStart.setUTCDate(1);
       monthStart.setUTCHours(0, 0, 0, 0);
 
-      const { data: usageRows } = await supabase
-        .from("ai_usage_log")
-        .select("cost_usd")
-        .eq("organization_id", organizationId)
-        .gte("created_at", monthStart.toISOString());
+      const [{ data: usageRows }, { data: org }] = await Promise.all([
+        supabase
+          .from("ai_usage_log")
+          .select("cost_usd")
+          .eq("organization_id", organizationId)
+          .gte("created_at", monthStart.toISOString()),
+        supabase
+          .from("organizations")
+          .select("ai_monthly_cap_usd")
+          .eq("id", organizationId)
+          .maybeSingle(),
+      ]);
 
       const monthlySpend = (usageRows ?? []).reduce((sum, r) => sum + Number(r.cost_usd), 0);
+      const monthlyCap = org?.ai_monthly_cap_usd ?? DEFAULT_MONTHLY_AI_CAP_USD;
 
-      if (monthlySpend >= MONTHLY_AI_CAP_USD) {
+      if (monthlySpend >= monthlyCap) {
         return new Response(
           JSON.stringify({
             response: "Hemos alcanzado el límite mensual de uso del asistente de IA para este negocio. Por favor contacta directamente al negocio para continuar.",

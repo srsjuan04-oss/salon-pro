@@ -14,7 +14,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Building2, CheckCircle2, Circle, Loader2, Plus, Users } from "lucide-react";
+import { Bot, Building2, CheckCircle2, Circle, Loader2, Pencil, Plus, Save, Users, X } from "lucide-react";
 import { toast } from "sonner";
 
 interface PlatformOrganization {
@@ -29,9 +29,72 @@ interface PlatformOrganization {
   appointments_last_30d: number;
   sales_total: number;
   is_active: boolean;
+  ai_monthly_cap_usd: number;
+  ai_usage_this_month_usd: number;
 }
 
 const currency = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 });
+const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+
+function AiCapEditor({ organizationId, cap, usage }: { organizationId: string; cap: number; usage: number }) {
+  const qc = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(String(cap));
+
+  const updateCap = useMutation({
+    mutationFn: async (newCap: number) => {
+      const { error } = await supabase.rpc("set_organization_ai_cap", { org_id: organizationId, new_cap: newCap });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Límite de IA actualizado");
+      qc.invalidateQueries({ queryKey: ["platform-organizations"] });
+      setEditing(false);
+    },
+    onError: (e: any) => toast.error(e.message ?? "No se pudo actualizar el límite"),
+  });
+
+  const overCap = usage >= cap;
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-1">
+        <Input
+          type="number"
+          min="0"
+          step="1"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          className="h-7 w-20 text-xs"
+          autoFocus
+        />
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-7 w-7"
+          disabled={updateCap.isPending || value === "" || Number(value) < 0}
+          onClick={() => updateCap.mutate(Number(value))}
+        >
+          {updateCap.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+        </Button>
+        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setEditing(false); setValue(String(cap)); }}>
+          <X className="w-3.5 h-3.5" />
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      <p className={`font-medium ${overCap ? "text-destructive" : ""}`}>
+        {usd.format(usage)} / {usd.format(cap)}
+      </p>
+      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setEditing(true)} title="Ajustar límite mensual">
+        <Pencil className="w-3 h-3" />
+      </Button>
+    </div>
+  );
+}
 
 export default function PlatformAdminPage() {
   const qc = useQueryClient();
@@ -218,7 +281,7 @@ export default function PlatformAdminPage() {
                     Creada el {new Date(org.created_at).toLocaleDateString("es-MX")}
                   </p>
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 shrink-0">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 shrink-0">
                   <div>
                     <p className="text-xs text-muted-foreground flex items-center gap-1"><Users className="w-3 h-3" /> Usuarios</p>
                     <p className="font-medium">{org.users_count}</p>
@@ -234,6 +297,14 @@ export default function PlatformAdminPage() {
                   <div>
                     <p className="text-xs text-muted-foreground">Ventas</p>
                     <p className="font-medium">{currency.format(Number(org.sales_total))}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground flex items-center gap-1"><Bot className="w-3 h-3" /> IA este mes</p>
+                    <AiCapEditor
+                      organizationId={org.organization_id}
+                      cap={Number(org.ai_monthly_cap_usd)}
+                      usage={Number(org.ai_usage_this_month_usd)}
+                    />
                   </div>
                 </div>
               </div>
