@@ -9,6 +9,7 @@ import { ServicesManager } from "@/components/settings/ServicesManager";
 import { WhapifySettingsCard } from "@/components/settings/WhapifySettingsCard";
 import { McpConnectionCard } from "@/components/settings/McpConnectionCard";
 import { TeamAccountsCard } from "@/components/settings/TeamAccountsCard";
+import { NotificationPreferencesCard } from "@/components/settings/NotificationPreferencesCard";
 import {
   Building2,
   Bell,
@@ -146,25 +147,7 @@ export default function SettingsPage() {
           </TabsContent>
 
           <TabsContent value="notifications" className="space-y-6">
-            <div className="bg-card rounded-2xl border shadow-soft p-6 space-y-4">
-              <h3 className="text-lg font-semibold">Preferencias de Notificación</h3>
-              
-              {[
-                { title: "Nuevas citas", desc: "Recibir notificación cuando un cliente agenda" },
-                { title: "Cancelaciones", desc: "Alertas cuando se cancela una cita" },
-                { title: "Recordatorios", desc: "Enviar recordatorios automáticos a clientes" },
-                { title: "Resumen diario", desc: "Recibir resumen de ventas al final del día" },
-                { title: "Mensajes WhatsApp", desc: "Notificar nuevos mensajes sin respuesta" },
-              ].map((item, i) => (
-                <div key={i} className="flex items-center justify-between p-4 rounded-xl bg-secondary/50">
-                  <div>
-                    <p className="font-medium">{item.title}</p>
-                    <p className="text-sm text-muted-foreground">{item.desc}</p>
-                  </div>
-                  <Switch defaultChecked={i < 3} />
-                </div>
-              ))}
-            </div>
+            <NotificationPreferencesCard />
           </TabsContent>
 
           <TabsContent value="calendar" className="space-y-6">
