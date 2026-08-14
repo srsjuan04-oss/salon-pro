@@ -23,7 +23,7 @@ export function WhapifySettingsCard() {
   const { data: settings } = useQuery({
     queryKey: ["whapify-settings"],
     queryFn: async () => {
-      const { data } = await supabase.from("whapify_settings").select("*").eq("singleton", true).maybeSingle();
+      const { data } = await supabase.from("whapify_settings").select("*").maybeSingle();
       return data;
     },
   });
@@ -111,9 +111,9 @@ export function WhapifySettingsCard() {
           <div>
             <h3 className="text-lg font-semibold flex items-center gap-2">
               <MessageSquare className="w-5 h-5" />
-              Configuración Whapify
+              Gestor de WPP
             </h3>
-            <p className="text-sm text-muted-foreground">Conecta tu cuenta para enviar recordatorios automáticos</p>
+            <p className="text-sm text-muted-foreground">Conecta tu propia cuenta de WhatsApp para enviar recordatorios automáticos</p>
           </div>
           {hasToken && (
             <Badge variant={isActive ? "default" : "destructive"} className="gap-1">
