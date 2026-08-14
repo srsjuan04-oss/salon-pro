@@ -6,10 +6,11 @@ import { Loader2 } from "lucide-react";
 interface ProtectedRouteProps {
   children: ReactNode;
   requireAdmin?: boolean;
+  requirePlatformAdmin?: boolean;
 }
 
-export function ProtectedRoute({ children, requireAdmin = false }: ProtectedRouteProps) {
-  const { isAuthenticated, isStaff, isAdmin, loading } = useAuth();
+export function ProtectedRoute({ children, requireAdmin = false, requirePlatformAdmin = false }: ProtectedRouteProps) {
+  const { isAuthenticated, isStaff, isAdmin, isPlatformAdmin, loading } = useAuth();
 
   if (loading) {
     return (
@@ -44,6 +45,19 @@ export function ProtectedRoute({ children, requireAdmin = false }: ProtectedRout
           <h1 className="text-2xl font-bold text-foreground">Acceso Restringido</h1>
           <p className="text-muted-foreground">
             Esta sección requiere permisos de administrador.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (requirePlatformAdmin && !isPlatformAdmin) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <div className="text-center space-y-4">
+          <h1 className="text-2xl font-bold text-foreground">Acceso Restringido</h1>
+          <p className="text-muted-foreground">
+            Esta sección requiere permisos de propietario de la plataforma.
           </p>
         </div>
       </div>
