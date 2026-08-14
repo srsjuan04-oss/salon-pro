@@ -110,14 +110,17 @@ Deno.serve(async (req) => {
     }
 
     // Resolver la organización dueña de esta conversación para limitar su gasto de IA.
-    // El asistente aún es de un solo negocio por despliegue (whapify_settings es global por ahora),
-    // así que si el cliente todavía no existe usamos la organización configurada en whapify_settings.
+    // Whapify ya es independiente por organización, pero este asistente todavía no
+    // sabe qué número de WhatsApp (org) recibió el mensaje entrante, así que si el
+    // cliente todavía no existe usamos la primera organización con Whapify activo.
     let organizationId: string | null = customer?.organization_id ?? null;
     if (!organizationId) {
       const { data: waSettings } = await supabase
         .from("whapify_settings")
         .select("organization_id")
-        .eq("singleton", true)
+        .eq("is_active", true)
+        .order("created_at", { ascending: true })
+        .limit(1)
         .maybeSingle();
       organizationId = waSettings?.organization_id ?? null;
     }
