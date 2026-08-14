@@ -31,6 +31,7 @@ export default function AuthPage() {
   
   // Register form
   const [registerName, setRegisterName] = useState("");
+  const [registerSalonName, setRegisterSalonName] = useState("");
   const [registerEmail, setRegisterEmail] = useState("");
   const [registerPassword, setRegisterPassword] = useState("");
   const [registerConfirmPassword, setRegisterConfirmPassword] = useState("");
@@ -160,6 +161,7 @@ export default function AuthPage() {
 
     try {
       nameSchema.parse(registerName);
+      nameSchema.parse(registerSalonName);
       emailSchema.parse(registerEmail);
       passwordSchema.parse(registerPassword);
     } catch (err) {
@@ -176,8 +178,8 @@ export default function AuthPage() {
       return;
     }
 
-    const { error } = await signUp(registerEmail, registerPassword, registerName);
-    
+    const { error } = await signUp(registerEmail, registerPassword, registerName, registerSalonName);
+
     if (error) {
       if (error.message.includes("already registered")) {
         setError("Este email ya está registrado. Intenta iniciar sesión.");
@@ -185,8 +187,9 @@ export default function AuthPage() {
         setError(error.message);
       }
     } else {
-      setSuccess("Cuenta creada exitosamente. Contacta al administrador para obtener acceso al sistema.");
+      setSuccess("¡Cuenta creada! Revisa tu correo si pedimos confirmación, luego inicia sesión como administrador de tu negocio.");
       setRegisterName("");
+      setRegisterSalonName("");
       setRegisterEmail("");
       setRegisterPassword("");
       setRegisterConfirmPassword("");
@@ -443,7 +446,19 @@ export default function AuthPage() {
                     required
                   />
                 </div>
-                
+
+                <div className="space-y-2">
+                  <Label htmlFor="register-salon-name">Nombre del negocio</Label>
+                  <Input
+                    id="register-salon-name"
+                    type="text"
+                    placeholder="Ej: Barbería El Corte"
+                    value={registerSalonName}
+                    onChange={(e) => setRegisterSalonName(e.target.value)}
+                    required
+                  />
+                </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="register-email">Email</Label>
                   <Input
@@ -493,7 +508,7 @@ export default function AuthPage() {
               </form>
               
               <p className="text-xs text-muted-foreground text-center">
-                Nota: Después de registrarte, un administrador debe asignarte un rol para acceder al sistema.
+                Al registrarte creamos tu negocio y quedas como administrador con acceso inmediato.
               </p>
             </TabsContent>
           </Tabs>
