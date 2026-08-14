@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
     // Load current token (used by all actions except save_token)
     async function getToken(override?: string): Promise<string | null> {
       if (override) return override;
-      const { data } = await supabase.from("whapify_settings").select("whapify_token").eq("singleton", true).maybeSingle();
+      const { data } = await supabase.from("whapify_settings").select("whapify_token").eq("organization_id", organizationId).maybeSingle();
       return data?.whapify_token ?? null;
     }
 
@@ -69,12 +69,11 @@ Deno.serve(async (req) => {
       const v = await whapifyFetch(token, "/accounts/flows");
       const valid = v.ok && Array.isArray(v.data);
       const { error: upsertError } = await supabase.from("whapify_settings").upsert({
-        singleton: true,
         organization_id: organizationId,
         whapify_token: token,
         is_active: valid,
         last_validated_at: new Date().toISOString(),
-      }, { onConflict: "singleton" });
+      }, { onConflict: "organization_id" });
       if (upsertError) {
         console.error("whapify_settings upsert error", upsertError);
         return new Response(JSON.stringify({ error: upsertError.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -90,7 +89,7 @@ Deno.serve(async (req) => {
       if (!token) return new Response(JSON.stringify({ valid: false, error: "Sin token" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       const v = await whapifyFetch(token, "/accounts/flows");
       const valid = v.ok && Array.isArray(v.data);
-      await supabase.from("whapify_settings").update({ is_active: valid, last_validated_at: new Date().toISOString() }).eq("singleton", true);
+      await supabase.from("whapify_settings").update({ is_active: valid, last_validated_at: new Date().toISOString() }).eq("organization_id", organizationId);
       return new Response(JSON.stringify({ valid, status: v.status }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -115,7 +114,7 @@ Deno.serve(async (req) => {
         const { error } = await supabase.from("whapify_flows").upsert(rows, { onConflict: "flow_id" });
         if (error) throw error;
       }
-      await supabase.from("whapify_settings").update({ last_synced_at: new Date().toISOString() }).eq("singleton", true);
+      await supabase.from("whapify_settings").update({ last_synced_at: new Date().toISOString() }).eq("organization_id", organizationId);
       return new Response(JSON.stringify({ success: true, count: rows.length }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 

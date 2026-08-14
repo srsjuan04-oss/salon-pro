@@ -58,23 +58,28 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    const { data: settings } = await supabase.from("whapify_settings").select("whapify_token,is_active").eq("singleton", true).maybeSingle();
-    if (!settings?.whapify_token || !settings.is_active) {
-      return new Response(JSON.stringify({ message: "Whapify not active", processed: 0 }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    const token = settings.whapify_token;
+    // Whapify ahora es una conexión independiente por organización: se carga
+    // el token activo de cada organización en vez de un token global único.
+    const { data: allSettings } = await supabase
+      .from("whapify_settings")
+      .select("organization_id, whapify_token, is_active");
+    const tokenByOrg = new Map(
+      (allSettings ?? [])
+        .filter((s: any) => s.is_active && s.whapify_token)
+        .map((s: any) => [s.organization_id as string, s.whapify_token as string])
+    );
 
     const now = new Date();
     const tenMinAgo = new Date(now.getTime() - 10 * 60 * 1000);
 
-    // Load active reminder settings — inactive types must NOT send
+    // Load active reminder settings per organización — inactive types must NOT send
     const { data: activeSettings } = await supabase
       .from("reminder_settings")
-      .select("reminder_type, whapify_flow_id, active")
+      .select("organization_id, reminder_type, whapify_flow_id, active")
       .eq("active", true);
-    const activeTypes = new Set((activeSettings ?? []).map((s: any) => s.reminder_type));
+    const activeTypes = new Set(
+      (activeSettings ?? []).map((s: any) => `${s.organization_id}|${s.reminder_type}`)
+    );
 
     const { data: reminders, error } = await supabase
       .from("appointment_reminders")
@@ -94,16 +99,24 @@ Deno.serve(async (req) => {
 
     for (const rem of reminders ?? []) {
       const appt = (rem as any).appointment;
+      const orgId = (rem as any).organization_id as string | null;
       if (!appt || appt.status === "cancelled") {
         await supabase.from("appointment_reminders").update({ status: "cancelled", error_message: "Cita cancelada o inexistente" }).eq("id", rem.id);
         continue;
       }
-      if (!activeTypes.has(rem.reminder_type)) {
+      if (!orgId || !activeTypes.has(`${orgId}|${rem.reminder_type}`)) {
         await supabase.from("appointment_reminders").update({ status: "cancelled", error_message: "Recordatorio desactivado en configuración" }).eq("id", rem.id);
         continue;
       }
       if (!rem.whapify_flow_id || !rem.customer_phone) {
         await supabase.from("appointment_reminders").update({ status: "failed", error_message: "Faltan flow_id o teléfono" }).eq("id", rem.id);
+        failed++;
+        continue;
+      }
+
+      const token = tokenByOrg.get(orgId);
+      if (!token) {
+        await supabase.from("appointment_reminders").update({ status: "failed", error_message: "Whapify no está conectado o activo para esta organización" }).eq("id", rem.id);
         failed++;
         continue;
       }
