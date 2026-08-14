@@ -5,6 +5,11 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Precio de claude-haiku-4-5 (el modelo que usa este asistente): $1.00 / $5.00 por millón de tokens.
+const HAIKU_INPUT_PRICE_PER_MTOK = 1.0;
+const HAIKU_OUTPUT_PRICE_PER_MTOK = 5.0;
+const MONTHLY_AI_CAP_USD = 10;
+
 interface AssistantRequest {
   message: string;
   phone_number: string;
@@ -102,6 +107,43 @@ Deno.serve(async (req) => {
         .order("appointment_date", { ascending: true })
         .limit(5);
       upcomingAppointments = customerAppointments || [];
+    }
+
+    // Resolver la organización dueña de esta conversación para limitar su gasto de IA.
+    // El asistente aún es de un solo negocio por despliegue (whapify_settings es global por ahora),
+    // así que si el cliente todavía no existe usamos la organización configurada en whapify_settings.
+    let organizationId: string | null = customer?.organization_id ?? null;
+    if (!organizationId) {
+      const { data: waSettings } = await supabase
+        .from("whapify_settings")
+        .select("organization_id")
+        .eq("singleton", true)
+        .maybeSingle();
+      organizationId = waSettings?.organization_id ?? null;
+    }
+
+    if (organizationId) {
+      const monthStart = new Date();
+      monthStart.setUTCDate(1);
+      monthStart.setUTCHours(0, 0, 0, 0);
+
+      const { data: usageRows } = await supabase
+        .from("ai_usage_log")
+        .select("cost_usd")
+        .eq("organization_id", organizationId)
+        .gte("created_at", monthStart.toISOString());
+
+      const monthlySpend = (usageRows ?? []).reduce((sum, r) => sum + Number(r.cost_usd), 0);
+
+      if (monthlySpend >= MONTHLY_AI_CAP_USD) {
+        return new Response(
+          JSON.stringify({
+            response: "Hemos alcanzado el límite mensual de uso del asistente de IA para este negocio. Por favor contacta directamente al negocio para continuar.",
+            action: null,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     const dayNames = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
@@ -240,6 +282,22 @@ ${conversation_context ? `CONTEXTO DE LA CONVERSACIÓN:\n${conversation_context}
       "Lo siento, no pude procesar tu mensaje. ¿Podrías intentarlo de nuevo?";
 
     console.log("AI Response:", assistantMessage);
+
+    if (organizationId && aiData.usage) {
+      const inputTokens = aiData.usage.input_tokens ?? 0;
+      const outputTokens = aiData.usage.output_tokens ?? 0;
+      const costUsd =
+        (inputTokens / 1_000_000) * HAIKU_INPUT_PRICE_PER_MTOK +
+        (outputTokens / 1_000_000) * HAIKU_OUTPUT_PRICE_PER_MTOK;
+
+      const { error: usageLogError } = await supabase.from("ai_usage_log").insert({
+        organization_id: organizationId,
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        cost_usd: costUsd,
+      });
+      if (usageLogError) console.error("Error registrando uso de IA:", usageLogError);
+    }
 
     // Parse actions from response
     let action = null;
