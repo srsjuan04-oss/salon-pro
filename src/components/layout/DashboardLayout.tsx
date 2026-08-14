@@ -1,11 +1,14 @@
 import { ReactNode, useState } from "react";
 import { useLocation } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { Sidebar } from "./Sidebar";
 import { Bell, Menu, Search, Scissors, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -15,6 +18,29 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   useLocation();
+
+  const { user, isAdmin } = useAuth();
+
+  const { data: profile } = useQuery({
+    queryKey: ["current-profile", user?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("name")
+        .eq("user_id", user!.id)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!user,
+  });
+
+  const displayName = profile?.name || user?.email?.split("@")[0] || "Usuario";
+  const initials = displayName
+    .split(" ")
+    .map((p) => p[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
 
   return (
     <div className="flex h-[100dvh] overflow-hidden bg-background">
@@ -75,12 +101,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
             <div className="flex items-center gap-3">
               <Avatar className="w-9 h-9 border-2 border-primary/20">
-                <AvatarImage src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100" />
-                <AvatarFallback>AD</AvatarFallback>
+                <AvatarFallback>{initials}</AvatarFallback>
               </Avatar>
               <div className="hidden xl:block">
-                <p className="text-sm font-medium">Carlos Mendoza</p>
-                <p className="text-xs text-muted-foreground">Administrador</p>
+                <p className="text-sm font-medium">{displayName}</p>
+                <p className="text-xs text-muted-foreground">{isAdmin ? "Administrador" : "Staff"}</p>
               </div>
             </div>
           </div>
