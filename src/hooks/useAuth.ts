@@ -74,26 +74,17 @@ export function useAuth() {
     return { error };
   };
 
-  const signUp = async (email: string, password: string, name: string) => {
+  const signUp = async (email: string, password: string, name: string, salonName: string) => {
     const redirectUrl = `${window.location.origin}/`;
-    
-    const { data, error } = await supabase.auth.signUp({
+
+    const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         emailRedirectTo: redirectUrl,
-        data: { name },
+        data: { name, salon_name: salonName },
       },
     });
-
-    if (!error && data.user) {
-      // Create profile
-      await supabase.from("profiles").insert({
-        user_id: data.user.id,
-        name,
-        email,
-      } as any);
-    }
 
     return { error };
   };
