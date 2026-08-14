@@ -8,6 +8,7 @@ import { ScheduleSettingsCard } from "@/components/settings/ScheduleSettingsCard
 import { ServicesManager } from "@/components/settings/ServicesManager";
 import { WhapifySettingsCard } from "@/components/settings/WhapifySettingsCard";
 import { McpConnectionCard } from "@/components/settings/McpConnectionCard";
+import { TeamAccountsCard } from "@/components/settings/TeamAccountsCard";
 import {
   Building2,
   Bell,
@@ -16,7 +17,8 @@ import {
   Scissors,
   MessageSquare,
   Server,
-  Save
+  Save,
+  Users
 } from "lucide-react";
 
 
@@ -37,6 +39,10 @@ export default function SettingsPage() {
             <TabsTrigger value="general" className="gap-2">
               <Building2 className="w-4 h-4" />
               General
+            </TabsTrigger>
+            <TabsTrigger value="accounts" className="gap-2">
+              <Users className="w-4 h-4" />
+              Cuentas
             </TabsTrigger>
             <TabsTrigger value="notifications" className="gap-2">
               <Bell className="w-4 h-4" />
@@ -63,6 +69,10 @@ export default function SettingsPage() {
               Facturación
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="accounts" className="space-y-6">
+            <TeamAccountsCard />
+          </TabsContent>
 
           <TabsContent value="whapify" className="space-y-6">
             <WhapifySettingsCard />
