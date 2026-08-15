@@ -1,10 +1,20 @@
 import { useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { supabase } from "@/integrations/supabase/client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -16,6 +26,16 @@ import { cn } from "@/lib/utils";
 import { Loader2, Search, CalendarDays, CheckCircle2, XCircle, Clock } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { toast } from "sonner";
+
+const CANCEL_REASONS = [
+  "Cliente canceló",
+  "Cliente no asistió",
+  "Reprogramación solicitada",
+  "Barbero no disponible",
+  "Error al agendar",
+  "Otro",
+];
 
 type Row = {
   id: string;
@@ -35,10 +55,15 @@ const statusLabel = (s: string) =>
   s === "completed" ? "Completada" : s === "cancelled" ? "Cancelada" : "Pendiente";
 
 export default function AppointmentsHistoryPage() {
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [cancelTarget, setCancelTarget] = useState<Row | null>(null);
+  const [cancelPreset, setCancelPreset] = useState("");
+  const [cancelReason, setCancelReason] = useState("");
+  const [isCancelling, setIsCancelling] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["appointments-history"],
@@ -55,6 +80,39 @@ export default function AppointmentsHistoryPage() {
       return data as unknown as Row[];
     },
   });
+
+  const handleConfirmCancel = async () => {
+    if (!cancelTarget) return;
+    const reason = cancelPreset === "Otro" || !cancelPreset ? cancelReason.trim() : cancelPreset;
+    if (!reason) {
+      toast.error("Indica el motivo de la cancelación");
+      return;
+    }
+    setIsCancelling(true);
+    try {
+      const { error } = await supabase
+        .from("appointments")
+        .update({
+          status: "cancelled",
+          cancellation_reason:
+            cancelPreset && cancelPreset !== "Otro" && cancelReason.trim()
+              ? `${cancelPreset} — ${cancelReason.trim()}`
+              : reason,
+        } as any)
+        .eq("id", cancelTarget.id);
+      if (error) throw error;
+      queryClient.invalidateQueries({ queryKey: ["appointments-history"] });
+      queryClient.invalidateQueries({ queryKey: ["appointments"] });
+      toast.success("Cita cancelada");
+      setCancelTarget(null);
+      setCancelPreset("");
+      setCancelReason("");
+    } catch (e) {
+      toast.error("Error al cancelar la cita");
+    } finally {
+      setIsCancelling(false);
+    }
+  };
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -173,6 +231,19 @@ export default function AppointmentsHistoryPage() {
                     {r.service?.price != null && (
                       <p className="text-sm font-medium">${r.service.price}</p>
                     )}
+                    {r.status !== "cancelled" && r.status !== "completed" && (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => {
+                          setCancelTarget(r);
+                          setCancelPreset("");
+                          setCancelReason("");
+                        }}
+                      >
+                        Cancelar
+                      </Button>
+                    )}
                   </div>
                 </div>
                 {r.status === "cancelled" && r.cancellation_reason && (
@@ -187,6 +258,48 @@ export default function AppointmentsHistoryPage() {
           </div>
         )}
       </div>
+
+      <Dialog open={!!cancelTarget} onOpenChange={(open) => !open && setCancelTarget(null)}>
+        <DialogContent className="sm:max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle>Motivo de la cancelación</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Motivo</Label>
+              <Select value={cancelPreset} onValueChange={setCancelPreset}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona un motivo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CANCEL_REASONS.map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {r}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Detalle {cancelPreset === "Otro" || !cancelPreset ? "(obligatorio)" : "(opcional)"}</Label>
+              <Textarea
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="Describe brevemente el motivo..."
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setCancelTarget(null)}>
+              Volver
+            </Button>
+            <Button variant="destructive" onClick={handleConfirmCancel} disabled={isCancelling}>
+              Confirmar cancelación
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
