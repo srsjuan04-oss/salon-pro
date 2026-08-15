@@ -8,8 +8,30 @@ const corsHeaders = {
 
 const WHAPIFY_BASE = "https://api.chatrace.com";
 
-function normalizePhone(p: string): string {
-  return (p || "").replace(/[^\d]/g, "");
+// Los clientes se guardan con el número local (ej. "3196168514", sin 57) cuando
+// el staff los crea a mano en la app. Solo los que llegan por el webhook de
+// WhatsApp traen el código de país incluido. Sin este prefijo, Chatrace crea/
+// envía a un número inválido y el recordatorio "se envía" (200 OK) pero nunca
+// llega — así se detectó: reminder marcado "sent" con whapify_response success
+// pero el cliente nunca recibió el WhatsApp.
+const COUNTRY_CODE_BY_TIMEZONE: Record<string, string> = {
+  "America/Bogota": "57",
+  "America/Mexico_City": "52",
+  "America/Guatemala": "502",
+  "America/Santiago": "56",
+  "America/Argentina/Buenos_Aires": "54",
+  "America/Sao_Paulo": "55",
+  "America/Caracas": "58",
+  "America/La_Paz": "591",
+  "America/Montevideo": "598",
+  "Europe/Madrid": "34",
+};
+
+function digitsWithCountryCode(rawPhone: string, timezone: string | undefined): string {
+  const digits = (rawPhone || "").replace(/[^\d]/g, "");
+  if (digits.length > 10) return digits; // ya incluye código de país
+  const cc = COUNTRY_CODE_BY_TIMEZONE[timezone ?? "America/Bogota"] ?? "57";
+  return `${cc}${digits}`;
 }
 
 async function findOrCreateContact(token: string, phone: string, name: string): Promise<string | null> {
@@ -58,23 +80,31 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    const { data: settings } = await supabase.from("whapify_settings").select("whapify_token,is_active").eq("singleton", true).maybeSingle();
-    if (!settings?.whapify_token || !settings.is_active) {
-      return new Response(JSON.stringify({ message: "Whapify not active", processed: 0 }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    const token = settings.whapify_token;
+    // Whapify es una conexión independiente por organización: se carga el
+    // token activo de cada organización en vez de un token global único.
+    const { data: allSettings } = await supabase
+      .from("whapify_settings")
+      .select("organization_id, whapify_token, is_active");
+    const tokenByOrg = new Map(
+      (allSettings ?? [])
+        .filter((s: any) => s.is_active && s.whapify_token)
+        .map((s: any) => [s.organization_id as string, s.whapify_token as string])
+    );
+
+    const { data: orgs } = await supabase.from("organizations").select("id, timezone");
+    const timezoneByOrg = new Map((orgs ?? []).map((o: any) => [o.id as string, o.timezone as string]));
 
     const now = new Date();
     const tenMinAgo = new Date(now.getTime() - 10 * 60 * 1000);
 
-    // Load active reminder settings — inactive types must NOT send
+    // Load active reminder settings per organización — inactive types must NOT send
     const { data: activeSettings } = await supabase
       .from("reminder_settings")
-      .select("reminder_type, whapify_flow_id, active")
+      .select("organization_id, reminder_type, whapify_flow_id, active")
       .eq("active", true);
-    const activeTypes = new Set((activeSettings ?? []).map((s: any) => s.reminder_type));
+    const activeTypes = new Set(
+      (activeSettings ?? []).map((s: any) => `${s.organization_id}|${s.reminder_type}`)
+    );
 
     const { data: reminders, error } = await supabase
       .from("appointment_reminders")
@@ -94,11 +124,12 @@ Deno.serve(async (req) => {
 
     for (const rem of reminders ?? []) {
       const appt = (rem as any).appointment;
+      const orgId = (rem as any).organization_id as string | null;
       if (!appt || appt.status === "cancelled") {
         await supabase.from("appointment_reminders").update({ status: "cancelled", error_message: "Cita cancelada o inexistente" }).eq("id", rem.id);
         continue;
       }
-      if (!activeTypes.has(rem.reminder_type)) {
+      if (!orgId || !activeTypes.has(`${orgId}|${rem.reminder_type}`)) {
         await supabase.from("appointment_reminders").update({ status: "cancelled", error_message: "Recordatorio desactivado en configuración" }).eq("id", rem.id);
         continue;
       }
@@ -108,7 +139,14 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const phone = normalizePhone(rem.customer_phone);
+      const token = tokenByOrg.get(orgId);
+      if (!token) {
+        await supabase.from("appointment_reminders").update({ status: "failed", error_message: "Whapify no está conectado o activo para esta organización" }).eq("id", rem.id);
+        failed++;
+        continue;
+      }
+
+      const phone = digitsWithCountryCode(rem.customer_phone, timezoneByOrg.get(orgId));
       try {
         const contactId = await findOrCreateContact(token, phone, rem.customer_name || "Cliente");
         if (!contactId) {
