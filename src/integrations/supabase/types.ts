@@ -10,10 +10,45 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.1"
+    PostgrestVersion: "14.15"
   }
   public: {
     Tables: {
+      ai_usage_log: {
+        Row: {
+          cost_usd: number
+          created_at: string
+          id: string
+          input_tokens: number
+          organization_id: string
+          output_tokens: number
+        }
+        Insert: {
+          cost_usd: number
+          created_at?: string
+          id?: string
+          input_tokens: number
+          organization_id: string
+          output_tokens: number
+        }
+        Update: {
+          cost_usd?: number
+          created_at?: string
+          id?: string
+          input_tokens?: number
+          organization_id?: string
+          output_tokens?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_usage_log_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       appointment_reminders: {
         Row: {
           appointment_id: string
@@ -510,30 +545,143 @@ export type Database = {
           },
         ]
       }
+      notification_preferences: {
+        Row: {
+          cancellations: boolean
+          created_at: string
+          daily_summary: boolean
+          id: string
+          new_appointments: boolean
+          organization_id: string
+          reminders: boolean
+          updated_at: string
+          whatsapp_messages: boolean
+        }
+        Insert: {
+          cancellations?: boolean
+          created_at?: string
+          daily_summary?: boolean
+          id?: string
+          new_appointments?: boolean
+          organization_id: string
+          reminders?: boolean
+          updated_at?: string
+          whatsapp_messages?: boolean
+        }
+        Update: {
+          cancellations?: boolean
+          created_at?: string
+          daily_summary?: boolean
+          id?: string
+          new_appointments?: boolean
+          organization_id?: string
+          reminders?: boolean
+          updated_at?: string
+          whatsapp_messages?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_preferences_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          appointment_id: string | null
+          created_at: string
+          id: string
+          message: string
+          organization_id: string
+          read: boolean
+          title: string
+          type: string
+        }
+        Insert: {
+          appointment_id?: string | null
+          created_at?: string
+          id?: string
+          message: string
+          organization_id: string
+          read?: boolean
+          title: string
+          type: string
+        }
+        Update: {
+          appointment_id?: string | null
+          created_at?: string
+          id?: string
+          message?: string
+          organization_id?: string
+          read?: boolean
+          title?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
+          ai_monthly_cap_usd: number
           created_at: string
           created_by: string | null
           id: string
           mcp_token: string
           name: string
+          timezone: string
           updated_at: string
         }
         Insert: {
+          ai_monthly_cap_usd?: number
           created_at?: string
           created_by?: string | null
           id?: string
           mcp_token?: string
           name?: string
+          timezone?: string
           updated_at?: string
         }
         Update: {
+          ai_monthly_cap_usd?: number
           created_at?: string
           created_by?: string | null
           id?: string
           mcp_token?: string
           name?: string
+          timezone?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      platform_admins: {
+        Row: {
+          created_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -891,7 +1039,6 @@ export type Database = {
           last_synced_at: string | null
           last_validated_at: string | null
           organization_id: string
-          singleton: boolean
           updated_at: string
           whapify_token: string | null
         }
@@ -902,7 +1049,6 @@ export type Database = {
           last_synced_at?: string | null
           last_validated_at?: string | null
           organization_id: string
-          singleton?: boolean
           updated_at?: string
           whapify_token?: string | null
         }
@@ -913,7 +1059,6 @@ export type Database = {
           last_synced_at?: string | null
           last_validated_at?: string | null
           organization_id?: string
-          singleton?: boolean
           updated_at?: string
           whapify_token?: string | null
         }
@@ -921,7 +1066,7 @@ export type Database = {
           {
             foreignKeyName: "whapify_settings_organization_id_fkey"
             columns: ["organization_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
@@ -1104,6 +1249,24 @@ export type Database = {
         Args: { _appointment_id: string }
         Returns: undefined
       }
+      get_platform_organizations: {
+        Args: never
+        Returns: {
+          admin_email: string
+          admin_name: string
+          ai_monthly_cap_usd: number
+          ai_usage_this_month_usd: number
+          appointments_count: number
+          appointments_last_30d: number
+          created_at: string
+          customers_count: number
+          is_active: boolean
+          organization_id: string
+          organization_name: string
+          sales_total: number
+          users_count: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -1112,6 +1275,11 @@ export type Database = {
         Returns: boolean
       }
       is_authenticated_staff: { Args: never; Returns: boolean }
+      is_platform_admin: { Args: never; Returns: boolean }
+      set_organization_ai_cap: {
+        Args: { new_cap: number; org_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       app_role: "admin" | "staff"
@@ -1236,7 +1404,7 @@ export type CompositeTypes<
 }
   ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
-    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    ? DefaultSchema["CompositeTypes"][CompositeTypeName]
     : never
 
 export const Constants = {
