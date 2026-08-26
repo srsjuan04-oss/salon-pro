@@ -214,7 +214,7 @@ export default function AuthPage() {
             <Scissors className="h-8 w-8 text-primary" />
           </div>
           <div>
-            <CardTitle className="text-2xl font-bold">StyleBook</CardTitle>
+            <CardTitle className="text-2xl font-bold">CharlIA</CardTitle>
             <CardDescription>Sistema de Gestión para Barbería</CardDescription>
           </div>
         </CardHeader>

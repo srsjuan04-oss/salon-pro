@@ -95,7 +95,7 @@ export default function SettingsPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Nombre del Salón</Label>
-                  <Input defaultValue="SalonPro Beauty Studio" />
+                  <Input defaultValue="CharlIA Beauty Studio" />
                 </div>
                 <div className="space-y-2">
                   <Label>Teléfono</Label>
@@ -103,11 +103,11 @@ export default function SettingsPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>Email</Label>
-                  <Input defaultValue="contacto@salonpro.com" />
+                  <Input defaultValue="contacto@charlia.com" />
                 </div>
                 <div className="space-y-2">
                   <Label>Sitio Web</Label>
-                  <Input defaultValue="www.salonpro.com" />
+                  <Input defaultValue="www.charlia.com" />
                 </div>
               </div>
 

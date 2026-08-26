@@ -6,97 +6,97 @@
 
 @layer base {
   :root {
-    /* Warm luxury palette for salon */
-    --background: 40 20% 98%;
-    --foreground: 30 10% 15%;
+    /* Clean CRM-style palette */
+    --background: 240 10% 98%;
+    --foreground: 240 10% 14%;
 
     --card: 0 0% 100%;
-    --card-foreground: 30 10% 15%;
+    --card-foreground: 240 10% 14%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 30 10% 15%;
+    --popover-foreground: 240 10% 14%;
 
-    /* Gold/Amber primary */
-    --primary: 38 92% 50%;
+    /* Violet primary (CharlIA logo) */
+    --primary: 262 83% 58%;
     --primary-foreground: 0 0% 100%;
 
-    /* Warm cream secondary */
-    --secondary: 40 30% 94%;
-    --secondary-foreground: 30 10% 25%;
+    /* Neutral secondary */
+    --secondary: 240 10% 95%;
+    --secondary-foreground: 240 10% 20%;
 
-    --muted: 40 20% 92%;
-    --muted-foreground: 30 10% 45%;
+    --muted: 240 10% 95%;
+    --muted-foreground: 240 6% 45%;
 
-    /* Soft gold accent */
-    --accent: 38 80% 55%;
-    --accent-foreground: 0 0% 100%;
+    /* Soft violet accent */
+    --accent: 262 60% 96%;
+    --accent-foreground: 262 83% 35%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    /* Success green for appointments */
-    --success: 142 70% 45%;
+    /* Success green */
+    --success: 152 69% 40%;
     --success-foreground: 0 0% 100%;
 
     /* Info blue */
     --info: 210 80% 55%;
     --info-foreground: 0 0% 100%;
 
-    --border: 40 20% 88%;
-    --input: 40 20% 88%;
-    --ring: 38 92% 50%;
+    --border: 240 10% 90%;
+    --input: 240 10% 90%;
+    --ring: 262 83% 58%;
 
-    --radius: 0.75rem;
+    --radius: 1rem;
 
-    /* Sidebar */
-    --sidebar-background: 30 15% 12%;
-    --sidebar-foreground: 40 20% 90%;
-    --sidebar-primary: 38 92% 50%;
+    /* Sidebar (light, matches reference dashboard) */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 240 10% 25%;
+    --sidebar-primary: 262 83% 58%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 30 15% 18%;
-    --sidebar-accent-foreground: 40 20% 90%;
-    --sidebar-border: 30 15% 20%;
-    --sidebar-ring: 38 92% 50%;
+    --sidebar-accent: 260 25% 96%;
+    --sidebar-accent-foreground: 262 83% 30%;
+    --sidebar-border: 240 10% 92%;
+    --sidebar-ring: 262 83% 58%;
 
     /* Custom gradients */
-    --gradient-gold: linear-gradient(135deg, hsl(38 92% 50%), hsl(45 100% 60%));
-    --gradient-warm: linear-gradient(135deg, hsl(40 30% 98%), hsl(35 40% 94%));
-    --gradient-dark: linear-gradient(135deg, hsl(30 15% 12%), hsl(30 10% 8%));
+    --gradient-gold: linear-gradient(135deg, hsl(262 83% 70%), hsl(258 89% 62%));
+    --gradient-warm: linear-gradient(135deg, hsl(240 10% 99%), hsl(240 10% 95%));
+    --gradient-dark: linear-gradient(180deg, hsl(0 0% 100%), hsl(240 10% 99%));
 
     /* Shadows */
-    --shadow-soft: 0 4px 20px -4px hsl(30 20% 20% / 0.08);
-    --shadow-medium: 0 8px 30px -6px hsl(30 20% 20% / 0.12);
-    --shadow-gold: 0 8px 30px -6px hsl(38 92% 50% / 0.25);
+    --shadow-soft: 0 1px 3px hsl(240 10% 10% / 0.06), 0 4px 16px -4px hsl(240 10% 20% / 0.06);
+    --shadow-medium: 0 8px 30px -6px hsl(240 10% 20% / 0.10);
+    --shadow-gold: 0 8px 24px -6px hsl(262 83% 58% / 0.28);
   }
 
   .dark {
-    --background: 30 15% 8%;
-    --foreground: 40 20% 95%;
+    --background: 240 10% 8%;
+    --foreground: 240 10% 95%;
 
-    --card: 30 15% 12%;
-    --card-foreground: 40 20% 95%;
+    --card: 240 10% 11%;
+    --card-foreground: 240 10% 95%;
 
-    --popover: 30 15% 12%;
-    --popover-foreground: 40 20% 95%;
+    --popover: 240 10% 11%;
+    --popover-foreground: 240 10% 95%;
 
-    --primary: 38 92% 55%;
-    --primary-foreground: 30 10% 10%;
+    --primary: 262 83% 68%;
+    --primary-foreground: 240 10% 8%;
 
-    --secondary: 30 15% 18%;
-    --secondary-foreground: 40 20% 90%;
+    --secondary: 240 10% 16%;
+    --secondary-foreground: 240 10% 90%;
 
-    --muted: 30 15% 18%;
-    --muted-foreground: 40 10% 55%;
+    --muted: 240 10% 16%;
+    --muted-foreground: 240 6% 60%;
 
-    --accent: 38 80% 50%;
-    --accent-foreground: 30 10% 10%;
+    --accent: 262 40% 20%;
+    --accent-foreground: 262 70% 88%;
 
     --destructive: 0 62% 50%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 30 15% 20%;
-    --input: 30 15% 20%;
-    --ring: 38 92% 55%;
+    --border: 240 10% 20%;
+    --input: 240 10% 20%;
+    --ring: 262 83% 68%;
   }
 }
 

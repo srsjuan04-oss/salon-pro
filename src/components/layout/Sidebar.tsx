@@ -9,7 +9,6 @@ import {
   DollarSign,
   Receipt,
   Settings,
-  Scissors,
   ChevronLeft,
   ChevronRight,
   LogOut,
@@ -60,12 +59,10 @@ export function Sidebar({ mobile = false, onNavigate }: SidebarProps) {
     >
       {/* Logo */}
       <div className="p-6 flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl gradient-gold flex items-center justify-center shadow-gold">
-          <Scissors className="w-5 h-5 text-primary-foreground" />
-        </div>
+        <img src="/charlia-logo.png" alt="CharlIA" className="w-12 h-12 rounded-xl shadow-gold shrink-0" />
         {!collapsed && (
           <div className="animate-fade-in">
-            <h1 className="text-xl font-bold text-sidebar-foreground">SalonPro</h1>
+            <h1 className="text-xl font-bold text-sidebar-foreground">CharlIA</h1>
             <p className="text-xs text-sidebar-foreground/60">Gestión inteligente</p>
           </div>
         )}

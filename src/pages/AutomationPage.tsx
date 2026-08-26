@@ -210,7 +210,7 @@ export default function AutomationPage() {
                       <Input
                         value={templateForm.footer_text}
                         onChange={(e) => setTemplateForm({ ...templateForm, footer_text: e.target.value })}
-                        placeholder="StyleBook Barbería"
+                        placeholder="CharlIA Barbería"
                       />
                     </div>
                   </div>

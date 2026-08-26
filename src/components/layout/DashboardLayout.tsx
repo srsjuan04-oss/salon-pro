@@ -2,7 +2,7 @@ import { ReactNode, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Sidebar } from "./Sidebar";
-import { Menu, Search, Scissors, X } from "lucide-react";
+import { Menu, Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -68,10 +68,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
             {/* Mobile brand */}
             <div className="flex lg:hidden items-center gap-2">
-              <div className="w-8 h-8 rounded-lg gradient-gold flex items-center justify-center">
-                <Scissors className="w-4 h-4 text-primary-foreground" />
-              </div>
-              <span className="font-bold">SalonPro</span>
+              <img src="/charlia-logo.png" alt="CharlIA" className="w-9 h-9 rounded-lg shrink-0" />
+              <span className="font-bold">CharlIA</span>
             </div>
 
             {/* Desktop search */}
