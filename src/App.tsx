@@ -32,15 +32,15 @@ const App = () => (
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-          <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+          <Route path="/" element={<ProtectedRoute hideFromBarber><Index /></ProtectedRoute>} />
           <Route path="/calendar" element={<ProtectedRoute><CalendarPage /></ProtectedRoute>} />
-          <Route path="/appointments-history" element={<ProtectedRoute><AppointmentsHistoryPage /></ProtectedRoute>} />
-          <Route path="/clients" element={<ProtectedRoute><ClientsPage /></ProtectedRoute>} />
-          <Route path="/staff" element={<ProtectedRoute><StaffPage /></ProtectedRoute>} />
-          <Route path="/sales" element={<ProtectedRoute><SalesPage /></ProtectedRoute>} />
-          <Route path="/expenses" element={<ProtectedRoute><ExpensesPage /></ProtectedRoute>} />
-          <Route path="/whatsapp" element={<ProtectedRoute><WhatsAppPage /></ProtectedRoute>} />
-          <Route path="/automation" element={<ProtectedRoute><AutomationPage /></ProtectedRoute>} />
+          <Route path="/appointments-history" element={<ProtectedRoute hideFromBarber><AppointmentsHistoryPage /></ProtectedRoute>} />
+          <Route path="/clients" element={<ProtectedRoute hideFromBarber><ClientsPage /></ProtectedRoute>} />
+          <Route path="/staff" element={<ProtectedRoute hideFromBarber><StaffPage /></ProtectedRoute>} />
+          <Route path="/sales" element={<ProtectedRoute hideFromBarber><SalesPage /></ProtectedRoute>} />
+          <Route path="/expenses" element={<ProtectedRoute hideFromBarber><ExpensesPage /></ProtectedRoute>} />
+          <Route path="/whatsapp" element={<ProtectedRoute hideFromBarber><WhatsAppPage /></ProtectedRoute>} />
+          <Route path="/automation" element={<ProtectedRoute hideFromBarber><AutomationPage /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute requireAdmin><SettingsPage /></ProtectedRoute>} />
           <Route path="/empresas" element={<ProtectedRoute requirePlatformAdmin><PlatformAdminPage /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />

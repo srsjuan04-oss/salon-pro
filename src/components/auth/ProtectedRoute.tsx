@@ -7,10 +7,12 @@ interface ProtectedRouteProps {
   children: ReactNode;
   requireAdmin?: boolean;
   requirePlatformAdmin?: boolean;
+  /** Esta ruta no es parte de la vista restringida de un barbero (solo Calendario). */
+  hideFromBarber?: boolean;
 }
 
-export function ProtectedRoute({ children, requireAdmin = false, requirePlatformAdmin = false }: ProtectedRouteProps) {
-  const { isAuthenticated, isStaff, isAdmin, isPlatformAdmin, loading } = useAuth();
+export function ProtectedRoute({ children, requireAdmin = false, requirePlatformAdmin = false, hideFromBarber = false }: ProtectedRouteProps) {
+  const { isAuthenticated, isStaff, isBarber, isAdmin, isPlatformAdmin, loading } = useAuth();
 
   if (loading) {
     return (
@@ -24,7 +26,11 @@ export function ProtectedRoute({ children, requireAdmin = false, requirePlatform
     return <Navigate to="/auth" replace />;
   }
 
-  if (!isStaff) {
+  if (isBarber && hideFromBarber) {
+    return <Navigate to="/calendar" replace />;
+  }
+
+  if (!isStaff && !isBarber) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
         <div className="text-center space-y-4">

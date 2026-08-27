@@ -39,6 +39,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { useScheduleSettings } from "@/hooks/useScheduleSettings";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useAuth } from "@/hooks/useAuth";
 
 const HOUR_PX = 80;
 
@@ -71,6 +72,14 @@ export default function CalendarPage() {
   const { data: services } = useServices();
   const { data: customers } = useCustomers();
   const { data: schedule } = useScheduleSettings();
+  const { isBarber, user } = useAuth();
+
+  // Un barbero solo ve su propia columna en el calendario (las citas ya llegan
+  // filtradas por RLS; esto evita mostrar columnas vacías de otros barberos).
+  const displayBarbers = useMemo(() => {
+    if (!isBarber) return barbers;
+    return (barbers ?? []).filter((b) => b.user_id === user?.id);
+  }, [barbers, isBarber, user]);
 
   const startHour = schedule ? parseInt(schedule.day_start.split(":")[0], 10) : 10;
   const endHour = schedule ? parseInt(schedule.day_end.split(":")[0], 10) : 20;
@@ -263,15 +272,17 @@ export default function CalendarPage() {
               Gestiona las citas de tu barbería
             </p>
           </div>
-          <div className="flex gap-3">
-            <Button
-              className="gradient-gold shadow-gold gap-2"
-              onClick={() => setIsDialogOpen(true)}
-            >
-              <Plus className="w-4 h-4" />
-              Nueva Cita
-            </Button>
-          </div>
+          {!isBarber && (
+            <div className="flex gap-3">
+              <Button
+                className="gradient-gold shadow-gold gap-2"
+                onClick={() => setIsDialogOpen(true)}
+              >
+                <Plus className="w-4 h-4" />
+                Nueva Cita
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Week Navigation */}
@@ -344,7 +355,7 @@ export default function CalendarPage() {
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
           </div>
-        ) : barbers && barbers.length > 0 && isMobile ? (
+        ) : displayBarbers && displayBarbers.length > 0 && isMobile ? (
           /* Mobile: agenda list ordered by time */
           <div className="space-y-3">
             {(appointments ?? []).length === 0 ? (
@@ -357,7 +368,7 @@ export default function CalendarPage() {
               [...(appointments ?? [])]
                 .sort((a, b) => a.start_time.localeCompare(b.start_time))
                 .map((apt) => {
-                  const barberIndex = barbers.findIndex((b) => b.id === apt.barber_id);
+                  const barberIndex = displayBarbers.findIndex((b) => b.id === apt.barber_id);
                   return (
                     <button
                       key={apt.id}
@@ -421,18 +432,18 @@ export default function CalendarPage() {
                 })
             )}
           </div>
-        ) : barbers && barbers.length > 0 ? (
+        ) : displayBarbers && displayBarbers.length > 0 ? (
           <div className="bg-card rounded-2xl border shadow-soft overflow-hidden">
 
             {/* Staff Headers */}
             <div
               className="grid border-b border-border"
-              style={{ gridTemplateColumns: `80px repeat(${barbers.length}, 1fr)` }}
+              style={{ gridTemplateColumns: `80px repeat(${displayBarbers.length}, 1fr)` }}
             >
               <div className="p-4 border-r border-border bg-secondary/30">
                 <span className="text-xs font-medium text-muted-foreground">Hora</span>
               </div>
-              {barbers.map((barber, index) => (
+              {displayBarbers.map((barber, index) => (
                 <div
                   key={barber.id}
                   className="p-3 border-r border-border last:border-r-0 bg-secondary/30"
@@ -461,7 +472,7 @@ export default function CalendarPage() {
             <ScrollArea className="h-[600px]">
               <div
                 className="grid"
-                style={{ gridTemplateColumns: `80px repeat(${barbers.length}, 1fr)` }}
+                style={{ gridTemplateColumns: `80px repeat(${displayBarbers.length}, 1fr)` }}
               >
                 {/* Time Column */}
                 <div className="border-r border-border">
@@ -478,7 +489,7 @@ export default function CalendarPage() {
                 </div>
 
                 {/* Staff Columns */}
-                {barbers.map((barber, barberIndex) => (
+                {displayBarbers.map((barber, barberIndex) => (
                   <div
                     key={barber.id}
                     className={cn(
@@ -542,15 +553,17 @@ export default function CalendarPage() {
         ) : (
           <div className="bg-card rounded-2xl border shadow-soft p-12 text-center">
             <p className="text-muted-foreground">
-              No hay barberos configurados. Agrega barberos para ver el calendario.
+              {isBarber
+                ? "Tu cuenta aún no está vinculada a un barbero de Staff. Pide a un administrador que lo revise."
+                : "No hay barberos configurados. Agrega barberos para ver el calendario."}
             </p>
           </div>
         )}
 
         {/* Legend */}
-        {barbers && barbers.length > 0 && (
+        {displayBarbers && displayBarbers.length > 0 && (
           <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-            {barbers.map((barber, index) => (
+            {displayBarbers.map((barber, index) => (
               <div key={barber.id} className="flex items-center gap-2">
                 <div
                   className={cn("w-3 h-3 rounded-full", getBarberColor(index))}
@@ -678,22 +691,24 @@ export default function CalendarPage() {
                             {(appt.service?.price ?? 0).toLocaleString()}
                           </p>
                         </div>
-                        <Button
-                          size="sm"
-                          className="gap-2 bg-green-600 hover:bg-green-700 text-white"
-                          onClick={() =>
-                            updateAppointment.mutate(
-                              { id: appt.id, status: "completed" },
-                              {
-                                onSuccess: () => toast.success("Cita cobrada y registrada en ventas"),
-                              }
-                            )
-                          }
-                          disabled={updateAppointment.isPending}
-                        >
-                          <CreditCard className="w-4 h-4" />
-                          Cobrar
-                        </Button>
+                        {!isBarber && (
+                          <Button
+                            size="sm"
+                            className="gap-2 bg-green-600 hover:bg-green-700 text-white"
+                            onClick={() =>
+                              updateAppointment.mutate(
+                                { id: appt.id, status: "completed" },
+                                {
+                                  onSuccess: () => toast.success("Cita cobrada y registrada en ventas"),
+                                }
+                              )
+                            }
+                            disabled={updateAppointment.isPending}
+                          >
+                            <CreditCard className="w-4 h-4" />
+                            Cobrar
+                          </Button>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -911,7 +926,7 @@ export default function CalendarPage() {
                 </div>
               )}
 
-              {selectedAppointment.status !== "cancelled" && selectedAppointment.status !== "completed" && (
+              {!isBarber && selectedAppointment.status !== "cancelled" && selectedAppointment.status !== "completed" && (
                 <DialogFooter className="gap-2">
                   <Button
                     variant="destructive"

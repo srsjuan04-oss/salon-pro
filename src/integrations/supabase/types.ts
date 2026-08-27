@@ -261,6 +261,7 @@ export type Database = {
           phone: string | null
           specialty: string | null
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           avatar_url?: string | null
@@ -273,6 +274,7 @@ export type Database = {
           phone?: string | null
           specialty?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           avatar_url?: string | null
@@ -285,6 +287,7 @@ export type Database = {
           phone?: string | null
           specialty?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -1295,6 +1298,10 @@ export type Database = {
     }
     Functions: {
       current_org_id: { Args: never; Returns: string }
+      current_role_name: {
+        Args: never
+        Returns: Database["public"]["Enums"]["app_role"]
+      }
       generate_appointment_reminders: {
         Args: { _appointment_id: string }
         Returns: undefined
@@ -1332,7 +1339,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "staff"
+      app_role: "admin" | "staff" | "barber"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1460,7 +1467,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "staff"],
+      app_role: ["admin", "staff", "barber"],
     },
   },
 } as const

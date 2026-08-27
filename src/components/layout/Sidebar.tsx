@@ -40,15 +40,17 @@ export function Sidebar({ mobile = false, onNavigate }: SidebarProps) {
   const [collapsedState, setCollapsed] = useState(false);
   const collapsed = mobile ? false : collapsedState;
   const location = useLocation();
-  const { user, signOut, isAdmin, isPlatformAdmin } = useAuth();
+  const { user, signOut, isAdmin, isPlatformAdmin, isBarber } = useAuth();
 
   const handleLogout = async () => {
     await signOut();
   };
 
-  const visibleMenuItems = menuItems.filter(
-    (item) => (!item.adminOnly || isAdmin) && (!item.platformAdminOnly || isPlatformAdmin)
-  );
+  const visibleMenuItems = isBarber
+    ? menuItems.filter((item) => item.path === "/calendar")
+    : menuItems.filter(
+        (item) => (!item.adminOnly || isAdmin) && (!item.platformAdminOnly || isPlatformAdmin)
+      );
 
   return (
     <aside 

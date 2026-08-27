@@ -20,7 +20,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [searchOpen, setSearchOpen] = useState(false);
   useLocation();
 
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, isBarber } = useAuth();
 
   const { data: profile } = useQuery({
     queryKey: ["current-profile", user?.id],
@@ -101,7 +101,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               </Avatar>
               <div className="hidden xl:block">
                 <p className="text-sm font-medium">{displayName}</p>
-                <p className="text-xs text-muted-foreground">{isAdmin ? "Administrador" : "Staff"}</p>
+                <p className="text-xs text-muted-foreground">{isAdmin ? "Administrador" : isBarber ? "Barbero" : "Staff"}</p>
               </div>
             </div>
           </div>

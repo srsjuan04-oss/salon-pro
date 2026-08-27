@@ -48,11 +48,31 @@ Deno.serve(async (req) => {
     const email = String(body.email ?? "").trim().toLowerCase();
     const password = String(body.password ?? "");
     const name = String(body.name ?? "").trim();
-    const role = body.role === "admin" ? "admin" : "staff";
+    const role = ["admin", "staff", "barber"].includes(body.role) ? body.role : "staff";
 
     if (!email || !email.includes("@")) return json({ error: "Email inválido" }, 400);
     if (password.length < 6) return json({ error: "La contraseña debe tener al menos 6 caracteres" }, 400);
     if (!name) return json({ error: "El nombre es requerido" }, 400);
+
+    // Una cuenta de barbero solo puede crearse para un barbero que ya existe en
+    // Staff, para que la vista de "solo mis citas" tenga a qué fila enlazarse.
+    let matchedBarberId: string | null = null;
+    if (role === "barber") {
+      const { data: matchedBarber } = await admin
+        .from("barbers")
+        .select("id, user_id")
+        .eq("organization_id", callerRole.organization_id)
+        .ilike("email", email)
+        .maybeSingle();
+
+      if (!matchedBarber) {
+        return json({ error: "No hay ningún barbero en Staff con ese correo. Agrégalo primero en Staff con este mismo email." }, 400);
+      }
+      if (matchedBarber.user_id) {
+        return json({ error: "Ese barbero ya tiene una cuenta de acceso vinculada." }, 400);
+      }
+      matchedBarberId = matchedBarber.id;
+    }
 
     const { data: created, error: createError } = await admin.auth.admin.createUser({
       email,
@@ -90,6 +110,16 @@ Deno.serve(async (req) => {
 
     if (staleOrgId && staleOrgId !== callerRole.organization_id) {
       await admin.from("organizations").delete().eq("id", staleOrgId);
+    }
+
+    if (matchedBarberId) {
+      const { error: linkError } = await admin
+        .from("barbers")
+        .update({ user_id: newUserId })
+        .eq("id", matchedBarberId);
+      if (linkError) {
+        console.error("barber link error", linkError);
+      }
     }
 
     return json({ success: true, user_id: newUserId });

@@ -29,7 +29,7 @@ import {
 import { Loader2, ShieldCheck, Trash2, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
 
-type Role = "admin" | "staff";
+type Role = "admin" | "staff" | "barber";
 
 export function TeamAccountsCard() {
   const qc = useQueryClient();
@@ -182,8 +182,15 @@ export function TeamAccountsCard() {
                   <SelectContent>
                     <SelectItem value="staff">Staff</SelectItem>
                     <SelectItem value="admin">Administrador</SelectItem>
+                    <SelectItem value="barber">Barbero (solo su calendario)</SelectItem>
                   </SelectContent>
                 </Select>
+                {formData.role === "barber" && (
+                  <p className="text-xs text-muted-foreground">
+                    El correo debe coincidir con el de un barbero ya agregado en Staff — así queda vinculada su cuenta
+                    a sus propias citas. Solo verá el Calendario, sin poder crear ni editar citas.
+                  </p>
+                )}
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
@@ -230,23 +237,28 @@ export function TeamAccountsCard() {
                         <ShieldCheck className="w-3 h-3" /> Admin
                       </Badge>
                     )}
+                    {m.role === "barber" && (
+                      <Badge variant="secondary" className="text-xs">Barbero</Badge>
+                    )}
                   </div>
                   <p className="text-sm text-muted-foreground truncate">{m.email}</p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <Select
-                    value={m.role}
-                    onValueChange={(v: Role) => updateRole.mutate({ id: m.id, role: v })}
-                    disabled={isSelf || updateRole.isPending}
-                  >
-                    <SelectTrigger className="w-[130px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="staff">Staff</SelectItem>
-                      <SelectItem value="admin">Administrador</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  {m.role !== "barber" && (
+                    <Select
+                      value={m.role}
+                      onValueChange={(v: Role) => updateRole.mutate({ id: m.id, role: v })}
+                      disabled={isSelf || updateRole.isPending}
+                    >
+                      <SelectTrigger className="w-[130px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="staff">Staff</SelectItem>
+                        <SelectItem value="admin">Administrador</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <Button variant="ghost" size="icon" disabled={isSelf} title="Revocar acceso">
