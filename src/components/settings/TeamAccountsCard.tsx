@@ -70,7 +70,14 @@ export function TeamAccountsCard() {
   const createAccount = useMutation({
     mutationFn: async (payload: { name: string; email: string; password: string; role: Role }) => {
       const { data, error } = await supabase.functions.invoke("create-team-account", { body: payload });
-      if (error) throw error;
+      if (error) {
+        // Cuando la función responde con un código distinto de 2xx, supabase-js
+        // descarta el cuerpo JSON y deja un mensaje genérico ("Edge Function
+        // returned a non-2xx status code") en error.message. El cuerpo real
+        // ({ error: "..." }) sigue disponible en error.context (el Response).
+        const body = await (error as any)?.context?.json?.().catch(() => null);
+        throw new Error(body?.error ?? error.message);
+      }
       if (data?.error) throw new Error(data.error);
       return data;
     },

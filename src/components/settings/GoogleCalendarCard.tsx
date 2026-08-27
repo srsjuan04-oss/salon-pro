@@ -6,6 +6,15 @@ import { Button } from "@/components/ui/button";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
+// Cuando la función responde con un código distinto de 2xx, supabase-js
+// descarta el cuerpo JSON y deja un mensaje genérico ("Edge Function
+// returned a non-2xx status code") en error.message. El cuerpo real
+// ({ error: "..." }) sigue disponible en error.context (el Response).
+async function invokeErrorMessage(error: any): Promise<string> {
+  const body = await error?.context?.json?.().catch(() => null);
+  return body?.error ?? error?.message ?? "Ocurrió un error inesperado";
+}
+
 const ERROR_MESSAGES: Record<string, string> = {
   token_exchange_failed: "Google rechazó la conexión. Intenta de nuevo.",
   no_refresh_token: "Google no entregó permisos persistentes. Revoca el acceso en tu cuenta de Google y vuelve a intentarlo.",
@@ -22,7 +31,7 @@ export function GoogleCalendarCard() {
     queryKey: ["google-calendar-status"],
     queryFn: async () => {
       const { data, error } = await supabase.functions.invoke("google-calendar", { body: { action: "status" } });
-      if (error) throw error;
+      if (error) throw new Error(await invokeErrorMessage(error));
       return data as { connected: boolean; connected_email: string | null };
     },
   });
@@ -51,7 +60,7 @@ export function GoogleCalendarCard() {
       const { data, error } = await supabase.functions.invoke("google-calendar", {
         body: { action: "get_auth_url", origin: window.location.origin },
       });
-      if (error) throw error;
+      if (error) throw new Error(await invokeErrorMessage(error));
       return data as { url: string };
     },
     onSuccess: (d) => {
@@ -63,7 +72,7 @@ export function GoogleCalendarCard() {
   const disconnect = useMutation({
     mutationFn: async () => {
       const { data, error } = await supabase.functions.invoke("google-calendar", { body: { action: "disconnect" } });
-      if (error) throw error;
+      if (error) throw new Error(await invokeErrorMessage(error));
       return data;
     },
     onSuccess: () => {
