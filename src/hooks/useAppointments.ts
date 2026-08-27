@@ -2,6 +2,15 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Tables } from "@/integrations/supabase/types";
 
+// Best-effort push to the org's connected Google Calendar. Never throws: a sync
+// failure (not connected, expired grant, Google API error) must not block the
+// appointment flow — it's a soft background effect.
+function syncAppointmentToGoogle(appointmentId: string) {
+  supabase.functions
+    .invoke("sync-appointment-to-google", { body: { appointment_id: appointmentId } })
+    .catch((e) => console.warn("Google Calendar sync failed", e));
+}
+
 export type Appointment = Tables<"appointments"> & {
   customer: Tables<"customers"> | null;
   barber: Tables<"barbers"> | null;
@@ -110,8 +119,9 @@ export function useCreateAppointment() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["appointments"] });
+      syncAppointmentToGoogle(data.id);
     },
   });
 }
@@ -141,8 +151,9 @@ export function useUpdateAppointment() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["appointments"] });
+      syncAppointmentToGoogle(data.id);
     },
   });
 }

@@ -10,7 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Send, Trash2, RefreshCw, Bell, MessageSquare, Clock, CheckCircle, XCircle, AlertCircle } from "lucide-react";
+import { Plus, Send, Trash2, RefreshCw, Bell, MessageSquare, Clock, CheckCircle, XCircle, AlertCircle, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 import { useWhatsAppTemplates, useCreateTemplate, useDeleteTemplate, useSyncTemplateToMeta } from "@/hooks/useWhatsAppTemplates";
 import { useNotificationFlows, useCreateFlow, useDeleteFlow, useToggleFlow } from "@/hooks/useNotificationFlows";
@@ -421,7 +421,10 @@ export default function AutomationPage() {
 
             <Card className="border-dashed">
               <CardContent className="py-6">
-                <h4 className="font-medium mb-2">⚙️ Configurar CRON Job</h4>
+                <h4 className="font-medium mb-2 flex items-center gap-2">
+                  <Settings2 className="w-4 h-4 text-primary" />
+                  Configurar CRON Job
+                </h4>
                 <p className="text-sm text-muted-foreground">
                   Para que los flujos se ejecuten automáticamente, necesitas configurar un cron job que llame a la función <code className="bg-muted px-1 rounded">process-notifications</code> cada minuto.
                 </p>

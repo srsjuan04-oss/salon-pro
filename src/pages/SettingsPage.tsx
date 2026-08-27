@@ -10,6 +10,7 @@ import { WhapifySettingsCard } from "@/components/settings/WhapifySettingsCard";
 import { McpConnectionCard } from "@/components/settings/McpConnectionCard";
 import { TeamAccountsCard } from "@/components/settings/TeamAccountsCard";
 import { NotificationPreferencesCard } from "@/components/settings/NotificationPreferencesCard";
+import { GoogleCalendarCard } from "@/components/settings/GoogleCalendarCard";
 import {
   Building2,
   Bell,
@@ -157,18 +158,9 @@ export default function SettingsPage() {
               <h3 className="text-lg font-semibold">Integraciones de Calendario</h3>
 
               <div className="space-y-4">
-                <div className="flex items-center justify-between p-4 rounded-xl border border-border">
-                  <div className="flex items-center gap-3">
-                    <img src="https://www.google.com/favicon.ico" alt="Google" className="w-8 h-8" />
-                    <div>
-                      <p className="font-medium">Google Calendar</p>
-                      <p className="text-sm text-muted-foreground">Sincroniza citas con Google</p>
-                    </div>
-                  </div>
-                  <Button variant="outline">Conectar</Button>
-                </div>
+                <GoogleCalendarCard />
 
-                <div className="flex items-center justify-between p-4 rounded-xl border border-border">
+                <div className="flex items-center justify-between p-4 rounded-xl border border-border opacity-60">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded bg-foreground flex items-center justify-center">
                       <Calendar className="w-4 h-4 text-background" />
@@ -178,7 +170,7 @@ export default function SettingsPage() {
                       <p className="text-sm text-muted-foreground">Sincroniza con iCloud</p>
                     </div>
                   </div>
-                  <Button variant="outline">Conectar</Button>
+                  <Button variant="outline" disabled>Próximamente</Button>
                 </div>
               </div>
             </div>

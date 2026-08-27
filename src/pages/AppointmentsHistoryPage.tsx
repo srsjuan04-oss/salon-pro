@@ -103,6 +103,9 @@ export default function AppointmentsHistoryPage() {
       if (error) throw error;
       queryClient.invalidateQueries({ queryKey: ["appointments-history"] });
       queryClient.invalidateQueries({ queryKey: ["appointments"] });
+      supabase.functions
+        .invoke("sync-appointment-to-google", { body: { appointment_id: cancelTarget.id } })
+        .catch((e) => console.warn("Google Calendar sync failed", e));
       toast.success("Cita cancelada");
       setCancelTarget(null);
       setCancelPreset("");
