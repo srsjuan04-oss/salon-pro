@@ -494,7 +494,6 @@ export type Database = {
           notes: string | null
           organization_id: string
           phone: string
-          pipeline_stage_id: string | null
           source: string | null
           updated_at: string
           whatsapp_id: string | null
@@ -511,7 +510,6 @@ export type Database = {
           notes?: string | null
           organization_id: string
           phone: string
-          pipeline_stage_id?: string | null
           source?: string | null
           updated_at?: string
           whatsapp_id?: string | null
@@ -528,7 +526,6 @@ export type Database = {
           notes?: string | null
           organization_id?: string
           phone?: string
-          pipeline_stage_id?: string | null
           source?: string | null
           updated_at?: string
           whatsapp_id?: string | null
@@ -539,13 +536,6 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "customers_pipeline_stage_id_fkey"
-            columns: ["pipeline_stage_id"]
-            isOneToOne: false
-            referencedRelation: "pipeline_stages"
             referencedColumns: ["id"]
           },
         ]
@@ -828,38 +818,6 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
-      }
-      pipeline_stages: {
-        Row: {
-          created_at: string
-          id: string
-          name: string
-          organization_id: string
-          position: number
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          name: string
-          organization_id: string
-          position?: number
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          name?: string
-          organization_id?: string
-          position?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "pipeline_stages_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       platform_admins: {
         Row: {

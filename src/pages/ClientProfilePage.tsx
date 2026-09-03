@@ -14,8 +14,6 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { ArrowLeft, Mail, Phone, Hash, Calendar, DollarSign, MessageSquare, Plus, CreditCard, CheckSquare, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  usePipelineStages,
-  useUpdateCustomer,
   useCustomerPayments,
   useRegisterPayment,
   useCustomerNotes,
@@ -52,8 +50,6 @@ export default function ClientProfilePage() {
     },
   });
 
-  const { data: pipelineStages } = usePipelineStages();
-  const updateCustomer = useUpdateCustomer();
   const { data: payments } = useCustomerPayments(id);
   const registerPayment = useRegisterPayment();
   const { data: notes, isLoading: loadingNotes } = useCustomerNotes(id);
@@ -149,22 +145,6 @@ export default function ClientProfilePage() {
                 )}
               </div>
             </div>
-          </div>
-          <div className="w-full md:w-56">
-            <Label className="text-xs text-muted-foreground">Etapa de pipeline</Label>
-            <Select
-              value={customer.pipeline_stage_id ?? undefined}
-              onValueChange={(stageId) => updateCustomer.mutate({ id: customer.id, pipeline_stage_id: stageId })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Sin etapa" />
-              </SelectTrigger>
-              <SelectContent>
-                {(pipelineStages ?? []).map((stage) => (
-                  <SelectItem key={stage.id} value={stage.id}>{stage.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
         </div>
 
