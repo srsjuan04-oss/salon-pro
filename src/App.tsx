@@ -11,6 +11,8 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 import CalendarPage from "./pages/CalendarPage";
 import AppointmentsHistoryPage from "./pages/AppointmentsHistoryPage";
 import ClientsPage from "./pages/ClientsPage";
+import ClientProfilePage from "./pages/ClientProfilePage";
+import TasksPage from "./pages/TasksPage";
 import StaffPage from "./pages/StaffPage";
 import SalesPage from "./pages/SalesPage";
 import ExpensesPage from "./pages/ExpensesPage";
@@ -36,6 +38,8 @@ const App = () => (
           <Route path="/calendar" element={<ProtectedRoute><CalendarPage /></ProtectedRoute>} />
           <Route path="/appointments-history" element={<ProtectedRoute hideFromBarber><AppointmentsHistoryPage /></ProtectedRoute>} />
           <Route path="/clients" element={<ProtectedRoute hideFromBarber><ClientsPage /></ProtectedRoute>} />
+          <Route path="/clients/:id" element={<ProtectedRoute hideFromBarber><ClientProfilePage /></ProtectedRoute>} />
+          <Route path="/tasks" element={<ProtectedRoute hideFromBarber><TasksPage /></ProtectedRoute>} />
           <Route path="/staff" element={<ProtectedRoute hideFromBarber><StaffPage /></ProtectedRoute>} />
           <Route path="/sales" element={<ProtectedRoute hideFromBarber><SalesPage /></ProtectedRoute>} />
           <Route path="/expenses" element={<ProtectedRoute hideFromBarber><ExpensesPage /></ProtectedRoute>} />

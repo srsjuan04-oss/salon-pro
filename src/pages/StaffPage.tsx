@@ -151,6 +151,31 @@ export default function StaffPage() {
     onError: () => toast.error("No se pudo actualizar el estado"),
   });
 
+  const [accessBarber, setAccessBarber] = useState<{ id: string; name: string; email: string } | null>(null);
+  const [accessPassword, setAccessPassword] = useState("");
+
+  const createAccess = useMutation({
+    mutationFn: async () => {
+      if (!accessBarber) return;
+      const { data, error } = await supabase.functions.invoke("create-team-account", {
+        body: { name: accessBarber.name, email: accessBarber.email, password: accessPassword, role: "barber" },
+      });
+      if (error) {
+        const body = await (error as any)?.context?.json?.().catch(() => null);
+        throw new Error(body?.error ?? error.message);
+      }
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: () => {
+      toast.success("Cuenta de acceso creada");
+      queryClient.invalidateQueries({ queryKey: ["barbers-all"] });
+      setAccessBarber(null);
+      setAccessPassword("");
+    },
+    onError: (e: any) => toast.error(e.message ?? "No se pudo crear la cuenta"),
+  });
+
   const statsByBarber = useMemo(() => {
     const map: Record<string, { sales: number; completed: number; total: number }> = {};
     (appointments ?? []).forEach((apt) => {
@@ -377,10 +402,22 @@ export default function StaffPage() {
                   </div>
 
                   {(member.email || member.phone) && (
-                    <div className="text-xs text-muted-foreground space-y-0.5 mb-4 truncate">
+                    <div className="text-xs text-muted-foreground space-y-0.5 mb-2 truncate">
                       {member.email && <p className="truncate">{member.email}</p>}
                       {member.phone && <p>{member.phone}</p>}
                     </div>
+                  )}
+
+                  {!member.user_id && member.email && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="mb-4 gap-1"
+                      onClick={() => setAccessBarber({ id: member.id, name: member.name, email: member.email! })}
+                    >
+                      <UserPlus className="w-3.5 h-3.5" />
+                      Crear acceso
+                    </Button>
                   )}
 
                   <div className="grid grid-cols-3 gap-3 pt-4 border-t border-border">
@@ -502,6 +539,40 @@ export default function StaffPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!accessBarber} onOpenChange={(open) => !open && setAccessBarber(null)}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Crear acceso para {accessBarber?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Se creará una cuenta de acceso con rol Barbero para <strong>{accessBarber?.email}</strong>, vinculada
+              directamente a esta ficha de Staff. Solo podrá ver su propio calendario.
+            </p>
+            <div className="space-y-2">
+              <Label htmlFor="access-password">Contraseña</Label>
+              <Input
+                id="access-password"
+                type="password"
+                placeholder="Mínimo 6 caracteres"
+                value={accessPassword}
+                onChange={(e) => setAccessPassword(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAccessBarber(null)}>Cancelar</Button>
+            <Button
+              onClick={() => createAccess.mutate()}
+              disabled={accessPassword.length < 6 || createAccess.isPending}
+            >
+              {createAccess.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Crear acceso
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </DashboardLayout>

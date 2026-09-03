@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { usePipelineStages, useRegisterPayment } from "@/hooks/useCustomers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -26,7 +28,9 @@ import {
   CreditCard,
   Banknote,
   Check,
-  Trophy
+  Trophy,
+  Download,
+  UserCheck,
 
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -45,6 +49,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell } from "recharts";
 import { ChartContainer, ChartTooltip } from "@/components/ui/chart";
@@ -55,6 +60,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { initialClients, calculateOverdueDays, getOverdueStatus, type Client, type AppointmentChange } from "@/data/clients";
+import { toast } from "sonner";
 
 const initialServices = [
   "Corte de cabello",
@@ -130,70 +136,78 @@ const paymentMethods = [
 ];
 
 export default function ClientsPage() {
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
+  const { data: pipelineStages } = usePipelineStages();
+  const registerPayment = useRegisterPayment();
+  const [stageFilter, setStageFilter] = useState<string | null>(null);
+
+  const loadClients = async () => {
+    setLoading(true);
+    const { data: customers } = await supabase
+      .from("customers")
+      .select("id, name, email, phone, created_at, identification_number, balance, balance_due_date, pipeline_stage_id")
+      .order("created_at", { ascending: false });
+
+    const { data: appts } = await supabase
+      .from("appointments")
+      .select("customer_id, appointment_date, status, service_id, services(name, price)");
+
+    const apptsByCustomer = new Map<string, any[]>();
+    (appts ?? []).forEach((a: any) => {
+      const arr = apptsByCustomer.get(a.customer_id) ?? [];
+      arr.push(a);
+      apptsByCustomer.set(a.customer_id, arr);
+    });
+
+    const mapped: Client[] = (customers ?? []).map((c: any) => {
+      const list = apptsByCustomer.get(c.id) ?? [];
+      const valid = list.filter((a) => a.status !== "cancelled");
+      const totalSpent = valid.reduce(
+        (s, a) => s + (Number(a.services?.price) || 0),
+        0
+      );
+      const dates = valid
+        .map((a) => a.appointment_date)
+        .sort()
+        .reverse();
+      const last = dates[0];
+      const tags = Array.from(
+        new Set(valid.map((a: any) => a.services?.name).filter(Boolean))
+      ).slice(0, 3) as string[];
+      return {
+        id: c.id,
+        name: c.name,
+        email: c.email ?? "",
+        phone: c.phone ?? "",
+        avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(
+          c.name
+        )}&background=random`,
+        visits: valid.length,
+        lastVisit: last
+          ? new Date(last).toLocaleDateString("es-ES", {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+            })
+          : "Sin visitas",
+        totalSpent,
+        vip: valid.length >= 10,
+        tags,
+        balance: Number(c.balance) || 0,
+        balanceDueDate: c.balance_due_date ?? undefined,
+        identificationNumber: c.identification_number ?? "",
+        pipelineStageId: c.pipeline_stage_id,
+        createdAt: c.created_at,
+      } as Client & { createdAt: string };
+    });
+    setClients(mapped);
+    setLoading(false);
+  };
 
   useEffect(() => {
-    const loadClients = async () => {
-      setLoading(true);
-      const { data: customers } = await supabase
-        .from("customers")
-        .select("id, name, email, phone, created_at")
-        .order("created_at", { ascending: false });
-
-      const { data: appts } = await supabase
-        .from("appointments")
-        .select("customer_id, appointment_date, status, service_id, services(name, price)");
-
-      const apptsByCustomer = new Map<string, any[]>();
-      (appts ?? []).forEach((a: any) => {
-        const arr = apptsByCustomer.get(a.customer_id) ?? [];
-        arr.push(a);
-        apptsByCustomer.set(a.customer_id, arr);
-      });
-
-      const mapped: Client[] = (customers ?? []).map((c: any) => {
-        const list = apptsByCustomer.get(c.id) ?? [];
-        const valid = list.filter((a) => a.status !== "cancelled");
-        const totalSpent = valid.reduce(
-          (s, a) => s + (Number(a.services?.price) || 0),
-          0
-        );
-        const dates = valid
-          .map((a) => a.appointment_date)
-          .sort()
-          .reverse();
-        const last = dates[0];
-        const tags = Array.from(
-          new Set(valid.map((a: any) => a.services?.name).filter(Boolean))
-        ).slice(0, 3) as string[];
-        return {
-          id: c.id,
-          name: c.name,
-          email: c.email ?? "",
-          phone: c.phone ?? "",
-          avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(
-            c.name
-          )}&background=random`,
-          visits: valid.length,
-          lastVisit: last
-            ? new Date(last).toLocaleDateString("es-ES", {
-                day: "numeric",
-                month: "short",
-                year: "numeric",
-              })
-            : "Sin visitas",
-          totalSpent,
-          vip: valid.length >= 10,
-          tags,
-          balance: 0,
-          identificationNumber: c.id.slice(0, 8),
-        };
-      });
-      setClients(mapped);
-      setLoading(false);
-    };
     loadClients();
   }, []);
 
@@ -214,6 +228,7 @@ export default function ClientsPage() {
     preferredServices: [] as string[],
     identificationNumber: "",
   });
+  const [editingClientId, setEditingClientId] = useState<string | null>(null);
   const [services] = useState(initialServices);
 
   const handleOpenPayment = (client: Client) => {
@@ -222,32 +237,41 @@ export default function ClientsPage() {
     setPaymentDialogOpen(true);
   };
 
-  const handlePaymentSubmit = (e: React.FormEvent) => {
+  const handlePaymentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedClient) return;
-    
+
     const paymentAmount = parseFloat(paymentData.amount) || 0;
-    const newBalance = Math.max(0, selectedClient.balance - paymentAmount);
-    
-    setClients(clients.map(c => 
-      c.id === selectedClient.id 
-        ? { ...c, balance: newBalance, balanceDueDate: newBalance === 0 ? undefined : c.balanceDueDate }
-        : c
-    ));
-    
-    console.log("Pago registrado:", {
-      clientId: selectedClient.id,
-      clientName: selectedClient.name,
-      amount: paymentAmount,
-      method: paymentData.method,
-      note: paymentData.note,
-      previousBalance: selectedClient.balance,
-      newBalance,
+    if (paymentAmount <= 0) return;
+
+    try {
+      await registerPayment.mutateAsync({
+        customerId: selectedClient.id,
+        amount: paymentAmount,
+        method: paymentData.method,
+        note: paymentData.note || undefined,
+      });
+      toast.success("Pago registrado");
+      setPaymentDialogOpen(false);
+      setPaymentData({ amount: "", method: "efectivo", note: "" });
+      setSelectedClient(null);
+      loadClients();
+    } catch (err: any) {
+      toast.error(err.message ?? "No se pudo registrar el pago");
+    }
+  };
+
+  const handleOpenEdit = (client: Client) => {
+    setEditingClientId(client.id);
+    setFormData({
+      name: client.name,
+      email: client.email,
+      phone: client.phone,
+      vip: client.vip,
+      preferredServices: client.tags,
+      identificationNumber: client.identificationNumber,
     });
-    
-    setPaymentDialogOpen(false);
-    setPaymentData({ amount: "", method: "efectivo", note: "" });
-    setSelectedClient(null);
+    setIsDialogOpen(true);
   };
 
   const getClientHistory = (clientId: string): AppointmentChange[] => {
@@ -273,17 +297,41 @@ export default function ClientsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (editingClientId) {
+      const { error } = await supabase
+        .from("customers")
+        .update({
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          identification_number: formData.identificationNumber || null,
+        })
+        .eq("id", editingClientId);
+      if (error) {
+        toast.error("No se pudo actualizar el cliente");
+        return;
+      }
+      toast.success("Cliente actualizado");
+      setIsDialogOpen(false);
+      setEditingClientId(null);
+      setFormData({ name: "", email: "", phone: "", vip: false, preferredServices: [], identificationNumber: "" });
+      loadClients();
+      return;
+    }
+
     const { data, error } = await supabase
       .from("customers")
       .insert({
         name: formData.name,
         email: formData.email,
         phone: formData.phone,
+        identification_number: formData.identificationNumber || null,
       } as any)
       .select()
       .single();
     if (error) {
-      console.error("Error creando cliente:", error);
+      toast.error("No se pudo crear el cliente");
       return;
     }
     const newClient: Client = {
@@ -298,7 +346,7 @@ export default function ClientsPage() {
       vip: formData.vip,
       tags: formData.preferredServices,
       balance: 0,
-      identificationNumber: data.id.slice(0, 8),
+      identificationNumber: data.identification_number ?? "",
     };
     setClients([newClient, ...clients]);
     setIsDialogOpen(false);
@@ -312,6 +360,33 @@ export default function ClientsPage() {
     client.identificationNumber.includes(searchTerm)
   );
 
+  const visibleClients = stageFilter
+    ? filteredClients.filter((c) => c.pipelineStageId === stageFilter)
+    : filteredClients;
+
+  const handleExportCsv = () => {
+    const headers = ["Nombre", "Email", "Teléfono", "Identificación", "Visitas", "Total gastado", "Saldo", "Última visita"];
+    const rows = clients.map((c) => [
+      c.name,
+      c.email,
+      c.phone,
+      c.identificationNumber,
+      String(c.visits),
+      String(c.totalSpent),
+      String(c.balance),
+      c.lastVisit,
+    ]);
+    const csv = [headers, ...rows]
+      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `clientes_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <DashboardLayout>
@@ -324,13 +399,19 @@ export default function ClientsPage() {
               Gestiona tu base de clientes • {clients.length} clientes totales
             </p>
           </div>
-          <Button 
-            className="gradient-gold shadow-gold gap-2"
-            onClick={() => setIsDialogOpen(true)}
-          >
-            <UserPlus className="w-4 h-4" />
-            Agregar Cliente
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" className="gap-2" onClick={handleExportCsv}>
+              <Download className="w-4 h-4" />
+              Exportar CSV
+            </Button>
+            <Button
+              className="gradient-gold shadow-gold gap-2"
+              onClick={() => setIsDialogOpen(true)}
+            >
+              <UserPlus className="w-4 h-4" />
+              Agregar Cliente
+            </Button>
+          </div>
         </div>
 
         {/* Gráfico de Deudas */}
@@ -508,6 +589,70 @@ export default function ClientsPage() {
           );
         })()}
 
+        {/* Clientes Adquiridos */}
+        {(() => {
+          const now = new Date();
+          const months = Array.from({ length: 6 }).map((_, i) => {
+            const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+            return { key: `${d.getFullYear()}-${d.getMonth()}`, label: d.toLocaleDateString("es-ES", { month: "short" }) };
+          });
+          const counts = new Map(months.map((m) => [m.key, 0]));
+          clients.forEach((c: any) => {
+            if (!c.createdAt) return;
+            const d = new Date(c.createdAt);
+            const key = `${d.getFullYear()}-${d.getMonth()}`;
+            if (counts.has(key)) counts.set(key, (counts.get(key) ?? 0) + 1);
+          });
+          const chartData = months.map((m) => ({ mes: m.label, clientes: counts.get(m.key) ?? 0 }));
+          const total = chartData.reduce((s, m) => s + m.clientes, 0);
+
+          const chartConfig = {
+            clientes: { label: "Clientes nuevos", color: "hsl(var(--primary))" },
+          };
+
+          return (
+            <Card className="bg-card rounded-2xl border shadow-soft">
+              <CardHeader className="pb-2">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-lg bg-primary/10">
+                    <UserCheck className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-lg">Clientes Adquiridos</CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      {total} clientes nuevos en los últimos 6 meses
+                    </p>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <ChartContainer config={chartConfig} className="h-[220px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={chartData}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="mes" fontSize={12} />
+                      <YAxis fontSize={12} allowDecimals={false} />
+                      <ChartTooltip
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            return (
+                              <div className="bg-popover border rounded-lg shadow-lg p-3">
+                                <p className="font-semibold">{payload[0].payload.clientes} clientes nuevos</p>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+                      <Bar dataKey="clientes" radius={[4, 4, 0, 0]} fill="hsl(var(--primary))" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </ChartContainer>
+              </CardContent>
+            </Card>
+          );
+        })()}
+
         {/* Search and Filters */}
 
         <div className="bg-card rounded-2xl border shadow-soft p-4">
@@ -522,23 +667,30 @@ export default function ClientsPage() {
               />
             </div>
             <div className="flex gap-2 flex-wrap">
-              <Button variant="outline" size="sm">Todos</Button>
-              <Button variant="outline" size="sm" className="gap-1">
-                <Star className="w-3 h-3 text-primary" />
-                VIP
+              <Button
+                variant={stageFilter === null ? "default" : "outline"}
+                size="sm"
+                onClick={() => setStageFilter(null)}
+              >
+                Todos
               </Button>
-              <Button variant="outline" size="sm">Recientes</Button>
-              <Button variant="outline" size="sm" className="gap-1 text-destructive border-destructive/30">
-                <AlertCircle className="w-3 h-3" />
-                Con Deuda
-              </Button>
+              {(pipelineStages ?? []).map((stage) => (
+                <Button
+                  key={stage.id}
+                  variant={stageFilter === stage.id ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setStageFilter(stage.id)}
+                >
+                  {stage.name}
+                </Button>
+              ))}
             </div>
           </div>
         </div>
 
         {/* Clients Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filteredClients.map((client, index) => (
+          {visibleClients.map((client, index) => (
             <div
               key={client.id}
               className={cn(
@@ -578,12 +730,12 @@ export default function ClientsPage() {
                       <History className="w-4 h-4" />
                       Ver Historial
                     </DropdownMenuItem>
-                    <DropdownMenuItem className="gap-2 cursor-pointer">
+                    <DropdownMenuItem onClick={() => navigate(`/clients/${client.id}`)} className="gap-2 cursor-pointer">
                       <Eye className="w-4 h-4" />
                       Ver Perfil
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem className="gap-2 cursor-pointer">
+                    <DropdownMenuItem onClick={() => handleOpenEdit(client)} className="gap-2 cursor-pointer">
                       <Edit className="w-4 h-4" />
                       Editar Cliente
                     </DropdownMenuItem>
@@ -616,6 +768,29 @@ export default function ClientsPage() {
                     {tag}
                   </Badge>
                 ))}
+              </div>
+
+              <div className="mb-4" onClick={(e) => e.stopPropagation()}>
+                <Select
+                  value={client.pipelineStageId ?? undefined}
+                  onValueChange={async (stageId) => {
+                    const { error } = await supabase.from("customers").update({ pipeline_stage_id: stageId }).eq("id", client.id);
+                    if (error) {
+                      toast.error("No se pudo cambiar la etapa");
+                      return;
+                    }
+                    loadClients();
+                  }}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Sin etapa" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(pipelineStages ?? []).map((stage) => (
+                      <SelectItem key={stage.id} value={stage.id}>{stage.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Sección de Saldo Pendiente y Mora */}
@@ -683,11 +858,20 @@ export default function ClientsPage() {
         </div>
       </div>
 
-      {/* Dialog Agregar Cliente */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      {/* Dialog Agregar/Editar Cliente */}
+      <Dialog
+        open={isDialogOpen}
+        onOpenChange={(open) => {
+          setIsDialogOpen(open);
+          if (!open) {
+            setEditingClientId(null);
+            setFormData({ name: "", email: "", phone: "", vip: false, preferredServices: [], identificationNumber: "" });
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Agregar Cliente</DialogTitle>
+            <DialogTitle>{editingClientId ? "Editar Cliente" : "Agregar Cliente"}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
@@ -821,7 +1005,7 @@ export default function ClientsPage() {
                 Cancelar
               </Button>
               <Button type="submit" className="gradient-gold shadow-gold">
-                Guardar Cliente
+                {editingClientId ? "Guardar Cambios" : "Guardar Cliente"}
               </Button>
             </DialogFooter>
           </form>
