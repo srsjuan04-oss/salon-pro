@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { useRegisterPayment } from "@/hooks/useCustomers";
+import { usePipelineStages, useRegisterPayment } from "@/hooks/useCustomers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +30,7 @@ import {
   Check,
   Trophy,
   Download,
+  UserCheck,
 
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -139,13 +140,15 @@ export default function ClientsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
+  const { data: pipelineStages } = usePipelineStages();
   const registerPayment = useRegisterPayment();
+  const [stageFilter, setStageFilter] = useState<string | null>(null);
 
   const loadClients = async () => {
     setLoading(true);
     const { data: customers } = await supabase
       .from("customers")
-      .select("id, name, email, phone, created_at, identification_number, balance, balance_due_date")
+      .select("id, name, email, phone, created_at, identification_number, balance, balance_due_date, pipeline_stage_id")
       .order("created_at", { ascending: false });
 
     const { data: appts } = await supabase
@@ -196,7 +199,9 @@ export default function ClientsPage() {
         balance: Number(c.balance) || 0,
         balanceDueDate: c.balance_due_date ?? undefined,
         identificationNumber: c.identification_number ?? "",
-      };
+        pipelineStageId: c.pipeline_stage_id,
+        createdAt: c.created_at,
+      } as Client & { createdAt: string };
     });
     setClients(mapped);
     setLoading(false);
@@ -354,6 +359,10 @@ export default function ClientsPage() {
     client.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
     client.identificationNumber.includes(searchTerm)
   );
+
+  const visibleClients = stageFilter
+    ? filteredClients.filter((c) => c.pipelineStageId === stageFilter)
+    : filteredClients;
 
   const handleExportCsv = () => {
     const headers = ["Nombre", "Email", "Teléfono", "Identificación", "Visitas", "Total gastado", "Saldo", "Última visita"];
@@ -580,6 +589,70 @@ export default function ClientsPage() {
           );
         })()}
 
+        {/* Clientes Adquiridos */}
+        {(() => {
+          const now = new Date();
+          const months = Array.from({ length: 6 }).map((_, i) => {
+            const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+            return { key: `${d.getFullYear()}-${d.getMonth()}`, label: d.toLocaleDateString("es-ES", { month: "short" }) };
+          });
+          const counts = new Map(months.map((m) => [m.key, 0]));
+          clients.forEach((c: any) => {
+            if (!c.createdAt) return;
+            const d = new Date(c.createdAt);
+            const key = `${d.getFullYear()}-${d.getMonth()}`;
+            if (counts.has(key)) counts.set(key, (counts.get(key) ?? 0) + 1);
+          });
+          const chartData = months.map((m) => ({ mes: m.label, clientes: counts.get(m.key) ?? 0 }));
+          const total = chartData.reduce((s, m) => s + m.clientes, 0);
+
+          const chartConfig = {
+            clientes: { label: "Clientes nuevos", color: "hsl(var(--primary))" },
+          };
+
+          return (
+            <Card className="bg-card rounded-2xl border shadow-soft">
+              <CardHeader className="pb-2">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-lg bg-primary/10">
+                    <UserCheck className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-lg">Clientes Adquiridos</CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      {total} clientes nuevos en los últimos 6 meses
+                    </p>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <ChartContainer config={chartConfig} className="h-[220px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={chartData}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="mes" fontSize={12} />
+                      <YAxis fontSize={12} allowDecimals={false} />
+                      <ChartTooltip
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            return (
+                              <div className="bg-popover border rounded-lg shadow-lg p-3">
+                                <p className="font-semibold">{payload[0].payload.clientes} clientes nuevos</p>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+                      <Bar dataKey="clientes" radius={[4, 4, 0, 0]} fill="hsl(var(--primary))" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </ChartContainer>
+              </CardContent>
+            </Card>
+          );
+        })()}
+
         {/* Search and Filters */}
 
         <div className="bg-card rounded-2xl border shadow-soft p-4">
@@ -593,12 +666,31 @@ export default function ClientsPage() {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
+            <div className="flex gap-2 flex-wrap">
+              <Button
+                variant={stageFilter === null ? "default" : "outline"}
+                size="sm"
+                onClick={() => setStageFilter(null)}
+              >
+                Todos
+              </Button>
+              {(pipelineStages ?? []).map((stage) => (
+                <Button
+                  key={stage.id}
+                  variant={stageFilter === stage.id ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setStageFilter(stage.id)}
+                >
+                  {stage.name}
+                </Button>
+              ))}
+            </div>
           </div>
         </div>
 
         {/* Clients Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filteredClients.map((client, index) => (
+          {visibleClients.map((client, index) => (
             <div
               key={client.id}
               className={cn(
@@ -676,6 +768,29 @@ export default function ClientsPage() {
                     {tag}
                   </Badge>
                 ))}
+              </div>
+
+              <div className="mb-4" onClick={(e) => e.stopPropagation()}>
+                <Select
+                  value={client.pipelineStageId ?? undefined}
+                  onValueChange={async (stageId) => {
+                    const { error } = await supabase.from("customers").update({ pipeline_stage_id: stageId }).eq("id", client.id);
+                    if (error) {
+                      toast.error("No se pudo cambiar la etapa");
+                      return;
+                    }
+                    loadClients();
+                  }}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Sin etapa" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(pipelineStages ?? []).map((stage) => (
+                      <SelectItem key={stage.id} value={stage.id}>{stage.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Sección de Saldo Pendiente y Mora */}

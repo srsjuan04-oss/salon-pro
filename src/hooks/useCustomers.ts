@@ -1,6 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
+export interface PipelineStage {
+  id: string;
+  name: string;
+  position: number;
+}
+
 export interface Tag {
   id: string;
   name: string;
@@ -23,6 +29,20 @@ export interface CustomerNote {
   note_type: string;
   source: string;
   occurred_at: string;
+}
+
+export function usePipelineStages() {
+  return useQuery({
+    queryKey: ["pipeline-stages"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("pipeline_stages")
+        .select("id, name, position")
+        .order("position");
+      if (error) throw error;
+      return data as PipelineStage[];
+    },
+  });
 }
 
 export function useTags() {
@@ -88,6 +108,35 @@ export function useSetCustomerTag() {
     },
     onSuccess: (_data, vars) => {
       queryClient.invalidateQueries({ queryKey: ["customer-tags", vars.customerId] });
+    },
+  });
+}
+
+export function useUpdateCustomer() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: {
+      id: string;
+      name?: string;
+      email?: string | null;
+      phone?: string;
+      identification_number?: string | null;
+      pipeline_stage_id?: string | null;
+      source?: string | null;
+      balance_due_date?: string | null;
+    }) => {
+      const { data, error } = await supabase
+        .from("customers")
+        .update(updates)
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+      queryClient.invalidateQueries({ queryKey: ["customer"] });
     },
   });
 }

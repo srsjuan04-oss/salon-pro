@@ -28,6 +28,7 @@ export interface Client {
   balanceDueDate?: string;
   identificationNumber: string;
   appointmentChanges?: AppointmentChange[];
+  pipelineStageId?: string | null;
 }
 
 export const initialClients: Client[] = [
