@@ -60,7 +60,7 @@ export default function SettingsPage() {
             </TabsTrigger>
             <TabsTrigger value="whapify" className="gap-2">
               <MessageSquare className="w-4 h-4" />
-              Whapify
+              Gestor de WhatsApp
             </TabsTrigger>
             <TabsTrigger value="mcp" className="gap-2">
               <Server className="w-4 h-4" />

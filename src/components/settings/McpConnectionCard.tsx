@@ -47,9 +47,9 @@ export function McpConnectionCard() {
             <Server className="w-5 h-5 text-primary" />
           </div>
           <div>
-            <CardTitle>Conexión MCP (Whapify)</CardTitle>
+            <CardTitle>Conexión MCP (Gestor de WhatsApp)</CardTitle>
             <CardDescription>
-              Datos necesarios para conectar Whapify / Chatrace con tu agenda.
+              Datos necesarios para conectar Gestor de WhatsApp / Chatrace con tu agenda.
             </CardDescription>
           </div>
         </div>
@@ -89,7 +89,7 @@ export function McpConnectionCard() {
             </div>
 
             <div className="space-y-2">
-              <Label>Nombre recomendado en Whapify</Label>
+              <Label>Nombre recomendado en Gestor de WhatsApp</Label>
               <Input value={config.name} readOnly />
             </div>
 
@@ -134,14 +134,14 @@ export function McpConnectionCard() {
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                No compartas este token. Es la clave que permite a Whapify operar tu agenda.
+                No compartas este token. Es la clave que permite a Gestor de WhatsApp operar tu agenda.
               </p>
             </div>
 
             <div className="rounded-xl bg-secondary/50 p-4 space-y-2">
               <p className="font-medium">¿Dónde se configura?</p>
               <ol className="text-sm text-muted-foreground list-decimal list-inside space-y-1">
-                <li>Entra a <strong>Whapify / Chatrace</strong> → Integraciones → <strong>MCP</strong></li>
+                <li>Entra a <strong>Gestor de WhatsApp / Chatrace</strong> → Integraciones → <strong>MCP</strong></li>
                 <li>Crea una nueva conexión MCP</li>
                 <li>Pega la <strong>URL</strong> de arriba</li>
                 <li>Selecciona autenticación <strong>Bearer Token</strong></li>

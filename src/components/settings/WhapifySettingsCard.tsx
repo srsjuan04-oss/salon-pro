@@ -111,7 +111,7 @@ export function WhapifySettingsCard() {
           <div>
             <h3 className="text-lg font-semibold flex items-center gap-2">
               <MessageSquare className="w-5 h-5" />
-              Configuración Whapify
+              Configuración Gestor de WhatsApp
             </h3>
             <p className="text-sm text-muted-foreground">Conecta tu cuenta para enviar recordatorios automáticos</p>
           </div>
@@ -137,7 +137,7 @@ export function WhapifySettingsCard() {
         )}
 
         <div className="space-y-2">
-          <Label>{hasToken ? "Actualizar token" : "Token de Whapify"}</Label>
+          <Label>{hasToken ? "Actualizar token" : "Token de Gestor de WhatsApp"}</Label>
           <div className="flex gap-2">
             <Input
               type="password"
@@ -167,12 +167,12 @@ export function WhapifySettingsCard() {
       <div className="bg-card rounded-2xl border shadow-soft p-6 space-y-4">
         <div>
           <h3 className="text-lg font-semibold">Recordatorios automáticos</h3>
-          <p className="text-sm text-muted-foreground">Asigna un Flow de Whapify a cada recordatorio</p>
+          <p className="text-sm text-muted-foreground">Asigna un Flow de Gestor de WhatsApp a cada recordatorio</p>
         </div>
 
         {!isActive && (
           <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-sm">
-            Conecta Whapify primero para poder seleccionar flows.
+            Conecta Gestor de WhatsApp primero para poder seleccionar flows.
           </div>
         )}
 
@@ -186,7 +186,7 @@ export function WhapifySettingsCard() {
                     <p className="font-medium">
                       {r.minutes_before >= 60 ? `${r.minutes_before / 60} hora${r.minutes_before / 60 > 1 ? "s" : ""}` : `${r.minutes_before} minutos`} antes
                     </p>
-                    <p className="text-xs text-muted-foreground">Canal: Whapify · Tipo: {r.reminder_type}</p>
+                    <p className="text-xs text-muted-foreground">Canal: Gestor de WhatsApp · Tipo: {r.reminder_type}</p>
                   </div>
                   <div className="flex items-center gap-2">
                     {configured ? (
@@ -203,7 +203,7 @@ export function WhapifySettingsCard() {
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-xs">Flow de Whapify</Label>
+                  <Label className="text-xs">Flow de Gestor de WhatsApp</Label>
                   <Select
                     value={r.whapify_flow_id ?? ""}
                     onValueChange={(v) => updateReminder.mutate({ id: r.id, patch: { whapify_flow_id: v || null } })}
