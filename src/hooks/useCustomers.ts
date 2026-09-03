@@ -7,12 +7,6 @@ export interface PipelineStage {
   position: number;
 }
 
-export interface Tag {
-  id: string;
-  name: string;
-  color: string;
-}
-
 export interface CustomerPayment {
   id: string;
   customer_id: string;
@@ -41,73 +35,6 @@ export function usePipelineStages() {
         .order("position");
       if (error) throw error;
       return data as PipelineStage[];
-    },
-  });
-}
-
-export function useTags() {
-  return useQuery({
-    queryKey: ["tags"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("tags")
-        .select("id, name, color")
-        .order("name");
-      if (error) throw error;
-      return data as Tag[];
-    },
-  });
-}
-
-export function useCreateTag() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (name: string) => {
-      const { data, error } = await supabase
-        .from("tags")
-        .insert({ name } as any)
-        .select()
-        .single();
-      if (error) throw error;
-      return data as Tag;
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tags"] }),
-  });
-}
-
-export function useCustomerTags(customerId: string | undefined) {
-  return useQuery({
-    queryKey: ["customer-tags", customerId],
-    enabled: !!customerId,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("customer_tags")
-        .select("tag_id, tags(id, name, color)")
-        .eq("customer_id", customerId!);
-      if (error) throw error;
-      return (data ?? []).map((r: any) => r.tags as Tag);
-    },
-  });
-}
-
-export function useSetCustomerTag() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ customerId, tagId, add }: { customerId: string; tagId: string; add: boolean }) => {
-      if (add) {
-        const { error } = await supabase.from("customer_tags").insert({ customer_id: customerId, tag_id: tagId } as any);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from("customer_tags")
-          .delete()
-          .eq("customer_id", customerId)
-          .eq("tag_id", tagId);
-        if (error) throw error;
-      }
-    },
-    onSuccess: (_data, vars) => {
-      queryClient.invalidateQueries({ queryKey: ["customer-tags", vars.customerId] });
     },
   });
 }

@@ -5,7 +5,6 @@ import { AppointmentList } from "@/components/dashboard/AppointmentList";
 import { StaffPerformance } from "@/components/dashboard/StaffPerformance";
 import { MiniCalendar } from "@/components/dashboard/MiniCalendar";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
-import { QuickActions } from "@/components/dashboard/QuickActions";
 import { ProfitSummary } from "@/components/dashboard/ProfitSummary";
 import { DollarSign, TrendingUp, Calendar, Receipt, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -123,7 +122,6 @@ export default function Index() {
 
           <div className="space-y-6">
             <ProfitSummary sales={stats.monthSales} expenses={stats.monthExpenses} />
-            <QuickActions />
             <MiniCalendar />
             <StaffPerformance />
           </div>

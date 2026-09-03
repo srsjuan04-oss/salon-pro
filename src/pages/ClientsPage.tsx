@@ -20,8 +20,6 @@ import {
   TrendingUp,
   Hash,
   History,
-  CalendarX,
-  CalendarClock,
   Eye,
   Edit,
   MessageSquare,
@@ -59,7 +57,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { initialClients, calculateOverdueDays, getOverdueStatus, type Client, type AppointmentChange } from "@/data/clients";
+import { calculateOverdueDays, getOverdueStatus, type Client } from "@/data/clients";
 import { toast } from "sonner";
 
 const initialServices = [
@@ -71,62 +69,6 @@ const initialServices = [
   "Tratamiento capilar",
   "Coloración",
   "Fade",
-];
-
-// Sample appointment changes for demo
-const sampleAppointmentChanges: AppointmentChange[] = [
-  {
-    id: "1",
-    appointmentId: "apt1",
-    clientId: "1",
-    clientName: "María García",
-    service: "Corte + Tinte",
-    originalDate: "2026-01-10",
-    originalTime: "10:00",
-    action: "rescheduled",
-    reason: "Cliente solicitó cambio por compromisos laborales",
-    newDate: "2026-01-12",
-    newTime: "14:00",
-    createdAt: "2026-01-09T10:30:00Z"
-  },
-  {
-    id: "2",
-    appointmentId: "apt2",
-    clientId: "2",
-    clientName: "Laura Martínez",
-    service: "Manicure",
-    originalDate: "2026-01-08",
-    originalTime: "11:00",
-    action: "cancelled",
-    reason: "No pudo asistir por enfermedad",
-    createdAt: "2026-01-08T09:00:00Z"
-  },
-  {
-    id: "3",
-    appointmentId: "apt3",
-    clientId: "3",
-    clientName: "Sofia Hernández",
-    service: "Tratamiento capilar",
-    originalDate: "2026-01-05",
-    originalTime: "15:00",
-    action: "cancelled",
-    reason: "Viaje de emergencia",
-    createdAt: "2026-01-04T16:00:00Z"
-  },
-  {
-    id: "4",
-    appointmentId: "apt4",
-    clientId: "1",
-    clientName: "María García",
-    service: "Coloración",
-    originalDate: "2025-12-20",
-    originalTime: "09:00",
-    action: "rescheduled",
-    reason: "Cambio de horario solicitado por la cliente",
-    newDate: "2025-12-22",
-    newTime: "11:00",
-    createdAt: "2025-12-19T14:00:00Z"
-  },
 ];
 
 const paymentMethods = [
@@ -272,10 +214,6 @@ export default function ClientsPage() {
       identificationNumber: client.identificationNumber,
     });
     setIsDialogOpen(true);
-  };
-
-  const getClientHistory = (clientId: string): AppointmentChange[] => {
-    return sampleAppointmentChanges.filter(change => change.clientId === clientId);
   };
 
   const [clientNotes, setClientNotes] = useState<any[]>([]);
@@ -1035,105 +973,7 @@ export default function ClientsPage() {
                   <p className="font-semibold">{selectedClient.name}</p>
                   <p className="text-sm text-muted-foreground">ID: {selectedClient.identificationNumber}</p>
                 </div>
-                <div className="text-right">
-                  {(() => {
-                    const history = getClientHistory(selectedClient.id);
-                    const cancellations = history.filter(h => h.action === "cancelled").length;
-                    const reschedules = history.filter(h => h.action === "rescheduled").length;
-                    return (
-                      <div className="flex gap-3">
-                        <div className="text-center">
-                          <p className="text-lg font-bold text-destructive">{cancellations}</p>
-                          <p className="text-xs text-muted-foreground">Anuladas</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-lg font-bold text-info">{reschedules}</p>
-                          <p className="text-xs text-muted-foreground">Reprogramadas</p>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
               </div>
-
-              {/* History List */}
-              <ScrollArea className="h-[300px] pr-4">
-                {(() => {
-                  const history = getClientHistory(selectedClient.id);
-                  
-                  if (history.length === 0) {
-                    return (
-                      <div className="flex flex-col items-center justify-center py-12 text-center">
-                        <History className="w-12 h-12 text-muted-foreground/50 mb-4" />
-                        <p className="text-muted-foreground">Este cliente no tiene cambios de citas registrados</p>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <div className="space-y-3">
-                      {history.map((change) => (
-                        <div
-                          key={change.id}
-                          className={cn(
-                            "p-4 rounded-lg border",
-                            change.action === "cancelled" 
-                              ? "bg-destructive/5 border-destructive/20" 
-                              : "bg-info/5 border-info/20"
-                          )}
-                        >
-                          <div className="flex items-start justify-between mb-2">
-                            <div className="flex items-center gap-2">
-                              {change.action === "cancelled" ? (
-                                <CalendarX className="w-4 h-4 text-destructive" />
-                              ) : (
-                                <CalendarClock className="w-4 h-4 text-info" />
-                              )}
-                              <Badge 
-                                variant="outline" 
-                                className={cn(
-                                  change.action === "cancelled" 
-                                    ? "text-destructive border-destructive/30" 
-                                    : "text-info border-info/30"
-                                )}
-                              >
-                                {change.action === "cancelled" ? "Anulada" : "Reprogramada"}
-                              </Badge>
-                            </div>
-                            <span className="text-xs text-muted-foreground">
-                              {new Date(change.createdAt).toLocaleDateString('es-ES', {
-                                day: 'numeric',
-                                month: 'short',
-                                year: 'numeric'
-                              })}
-                            </span>
-                          </div>
-                          
-                          <p className="font-medium mb-1">{change.service}</p>
-                          
-                          <div className="grid grid-cols-2 gap-2 text-sm mb-3">
-                            <div>
-                              <span className="text-muted-foreground">Fecha original: </span>
-                              <span>{change.originalDate} - {change.originalTime}</span>
-                            </div>
-                            {change.action === "rescheduled" && change.newDate && (
-                              <div>
-                                <span className="text-muted-foreground">Nueva fecha: </span>
-                                <span className="text-info">{change.newDate} - {change.newTime}</span>
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="flex items-start gap-2 p-2 rounded bg-background/50">
-                            <MessageSquare className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
-                            <p className="text-sm text-muted-foreground">{change.reason}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })()}
-              </ScrollArea>
 
               {/* Notas de conversaciones (IA) */}
               <div>

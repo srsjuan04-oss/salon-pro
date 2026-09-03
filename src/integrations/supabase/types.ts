@@ -448,39 +448,6 @@ export type Database = {
           },
         ]
       }
-      customer_tags: {
-        Row: {
-          created_at: string
-          customer_id: string
-          tag_id: string
-        }
-        Insert: {
-          created_at?: string
-          customer_id: string
-          tag_id: string
-        }
-        Update: {
-          created_at?: string
-          customer_id?: string
-          tag_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "customer_tags_customer_id_fkey"
-            columns: ["customer_id"]
-            isOneToOne: false
-            referencedRelation: "customers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "customer_tags_tag_id_fkey"
-            columns: ["tag_id"]
-            isOneToOne: false
-            referencedRelation: "tags"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       customers: {
         Row: {
           assigned_to: string | null
@@ -1139,38 +1106,6 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "services_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      tags: {
-        Row: {
-          color: string
-          created_at: string
-          id: string
-          name: string
-          organization_id: string
-        }
-        Insert: {
-          color?: string
-          created_at?: string
-          id?: string
-          name: string
-          organization_id: string
-        }
-        Update: {
-          color?: string
-          created_at?: string
-          id?: string
-          name?: string
-          organization_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "tags_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
