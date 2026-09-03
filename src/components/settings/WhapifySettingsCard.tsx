@@ -16,6 +16,69 @@ function maskToken(t: string | null | undefined) {
   return `${"•".repeat(Math.max(0, 12))}${tail}`;
 }
 
+interface ChatCharliaTemplate {
+  id: string;
+  name: string;
+  language: string;
+}
+
+/** Trae y asigna la plantilla real de Meta desde Chat CharlIA, usando la URL del webhook ya guardada. */
+function ChatCharliaTemplatePicker({ webhookUrl }: { webhookUrl: string }) {
+  const qc = useQueryClient();
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["chat-charlia-templates", webhookUrl],
+    queryFn: async () => {
+      const res = await fetch(`${webhookUrl}/templates`);
+      if (!res.ok) throw new Error("No se pudieron cargar las plantillas");
+      return (await res.json()) as { templates: ChatCharliaTemplate[]; currentTemplateId: string | null };
+    },
+  });
+
+  const assignTemplate = useMutation({
+    mutationFn: async (templateId: string) => {
+      const res = await fetch(webhookUrl, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ templateId }),
+      });
+      if (!res.ok) throw new Error("No se pudo asignar la plantilla");
+    },
+    onSuccess: () => {
+      toast.success("Plantilla asignada");
+      qc.invalidateQueries({ queryKey: ["chat-charlia-templates", webhookUrl] });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  if (isLoading) return <p className="text-xs text-muted-foreground">Cargando plantillas de Chat CharlIA…</p>;
+  if (isError) return <p className="text-xs text-destructive">No se pudieron cargar las plantillas. Revisa la URL del webhook.</p>;
+
+  const templates = data?.templates ?? [];
+
+  return (
+    <div className="space-y-1">
+      <Label className="text-xs">Plantilla de Meta (Chat CharlIA)</Label>
+      <Select
+        value={data?.currentTemplateId ?? ""}
+        onValueChange={(v) => assignTemplate.mutate(v)}
+        disabled={templates.length === 0 || assignTemplate.isPending}
+      >
+        <SelectTrigger>
+          <SelectValue placeholder={templates.length ? "Selecciona una plantilla" : "No hay plantillas aprobadas todavía"} />
+        </SelectTrigger>
+        <SelectContent>
+          {templates.map((t) => (
+            <SelectItem key={t.id} value={t.id}>
+              {t.name} ({t.language})
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
 export function WhapifySettingsCard() {
   const qc = useQueryClient();
   const [tokenInput, setTokenInput] = useState("");
@@ -226,6 +289,8 @@ export function WhapifySettingsCard() {
                     Si se configura, este recordatorio se envía por Chat CharlIA en vez de Gestor de WhatsApp.
                   </p>
                 </div>
+
+                {r.webhook_url && <ChatCharliaTemplatePicker webhookUrl={r.webhook_url} />}
 
                 <div className="space-y-1">
                   <Label className="text-xs">Flow de Gestor de WhatsApp (alternativa)</Label>
