@@ -768,6 +768,7 @@ export type Database = {
           ai_monthly_cap_usd: number
           created_at: string
           created_by: string | null
+          currency: string
           id: string
           mcp_token: string
           name: string
@@ -778,6 +779,7 @@ export type Database = {
           ai_monthly_cap_usd?: number
           created_at?: string
           created_by?: string | null
+          currency?: string
           id?: string
           mcp_token?: string
           name?: string
@@ -788,6 +790,7 @@ export type Database = {
           ai_monthly_cap_usd?: number
           created_at?: string
           created_by?: string | null
+          currency?: string
           id?: string
           mcp_token?: string
           name?: string
@@ -883,6 +886,7 @@ export type Database = {
           organization_id: string
           reminder_type: string
           updated_at: string
+          webhook_url: string | null
           whapify_flow_id: string | null
         }
         Insert: {
@@ -894,6 +898,7 @@ export type Database = {
           organization_id: string
           reminder_type: string
           updated_at?: string
+          webhook_url?: string | null
           whapify_flow_id?: string | null
         }
         Update: {
@@ -905,6 +910,7 @@ export type Database = {
           organization_id?: string
           reminder_type?: string
           updated_at?: string
+          webhook_url?: string | null
           whapify_flow_id?: string | null
         }
         Relationships: [

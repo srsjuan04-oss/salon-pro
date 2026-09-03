@@ -71,6 +71,24 @@ async function sendFlow(token: string, contactId: string, flowId: string) {
   return { ok: res.ok, status: res.status, data };
 }
 
+// Envía el recordatorio por el canal real de WhatsApp (Chat CharlIA), con plantillas
+// aprobadas por Meta. webhook_url ya trae su propio id no adivinable (mismo modelo
+// que whapify_flow_id), no hace falta un token/header adicional.
+async function sendChatCharlia(
+  webhookUrl: string,
+  payload: { phone: string; customerName: string | null; serviceName: string | null; barberName: string | null; time: string | null },
+) {
+  const res = await fetch(webhookUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const text = await res.text();
+  let data: unknown = null;
+  try { data = text ? JSON.parse(text) : text; } catch { data = text; }
+  return { ok: res.ok, status: res.status, data };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -100,17 +118,17 @@ Deno.serve(async (req) => {
     // Load active reminder settings per organización — inactive types must NOT send
     const { data: activeSettings } = await supabase
       .from("reminder_settings")
-      .select("organization_id, reminder_type, whapify_flow_id, active")
+      .select("organization_id, reminder_type, whapify_flow_id, webhook_url, active")
       .eq("active", true);
-    const activeTypes = new Set(
-      (activeSettings ?? []).map((s: any) => `${s.organization_id}|${s.reminder_type}`)
+    const settingsByOrgType = new Map(
+      (activeSettings ?? []).map((s: any) => [`${s.organization_id}|${s.reminder_type}`, s])
     );
 
     const { data: reminders, error } = await supabase
       .from("appointment_reminders")
       .select(`
         *,
-        appointment:appointments(id, status, appointment_date, start_time)
+        appointment:appointments(id, status, appointment_date, start_time, barber:barbers(name), service:services(name))
       `)
       .eq("status", "pending")
       .lte("scheduled_at", now.toISOString())
@@ -129,24 +147,67 @@ Deno.serve(async (req) => {
         await supabase.from("appointment_reminders").update({ status: "cancelled", error_message: "Cita cancelada o inexistente" }).eq("id", rem.id);
         continue;
       }
-      if (!orgId || !activeTypes.has(`${orgId}|${rem.reminder_type}`)) {
+      const settings = orgId ? settingsByOrgType.get(`${orgId}|${rem.reminder_type}`) : undefined;
+      if (!settings) {
         await supabase.from("appointment_reminders").update({ status: "cancelled", error_message: "Recordatorio desactivado en configuración" }).eq("id", rem.id);
         continue;
       }
-      if (!rem.whapify_flow_id || !rem.customer_phone) {
-        await supabase.from("appointment_reminders").update({ status: "failed", error_message: "Faltan flow_id o teléfono" }).eq("id", rem.id);
+      if (!rem.customer_phone) {
+        await supabase.from("appointment_reminders").update({ status: "failed", error_message: "Falta el teléfono del cliente" }).eq("id", rem.id);
         failed++;
         continue;
       }
 
-      const token = tokenByOrg.get(orgId);
+      // Chat CharlIA (Meta Cloud API con plantillas aprobadas) tiene prioridad si está
+      // configurado; si no, se cae al camino viejo de Whapify/Chatrace.
+      if (settings.webhook_url) {
+        try {
+          const send = await sendChatCharlia(settings.webhook_url, {
+            phone: digitsWithCountryCode(rem.customer_phone, timezoneByOrg.get(orgId!)),
+            customerName: rem.customer_name ?? null,
+            serviceName: appt.service?.name ?? null,
+            barberName: appt.barber?.name ?? null,
+            time: appt.start_time ? String(appt.start_time).slice(0, 5) : null,
+          });
+          if (send.ok) {
+            await supabase.from("appointment_reminders").update({
+              status: "sent",
+              sent_at: new Date().toISOString(),
+              whapify_response: send.data as any,
+            }).eq("id", rem.id);
+            processed++;
+          } else {
+            await supabase.from("appointment_reminders").update({
+              status: "failed",
+              error_message: `Chat CharlIA ${send.status}: ${JSON.stringify(send.data).slice(0, 500)}`,
+              whapify_response: send.data as any,
+            }).eq("id", rem.id);
+            failed++;
+          }
+        } catch (e) {
+          await supabase.from("appointment_reminders").update({
+            status: "failed",
+            error_message: e instanceof Error ? e.message : "Unknown",
+          }).eq("id", rem.id);
+          failed++;
+        }
+        continue;
+      }
+
+      if (!settings.whapify_flow_id) {
+        await supabase.from("appointment_reminders").update({ status: "failed", error_message: "Faltan flow_id/webhook de destino" }).eq("id", rem.id);
+        failed++;
+        continue;
+      }
+
+      const token = tokenByOrg.get(orgId!);
       if (!token) {
         await supabase.from("appointment_reminders").update({ status: "failed", error_message: "Whapify no está conectado o activo para esta organización" }).eq("id", rem.id);
         failed++;
         continue;
       }
 
-      const phone = digitsWithCountryCode(rem.customer_phone, timezoneByOrg.get(orgId));
+      const phone = digitsWithCountryCode(rem.customer_phone, timezoneByOrg.get(orgId!));
       try {
         const contactId = await findOrCreateContact(token, phone, rem.customer_name || "Cliente");
         if (!contactId) {
@@ -154,7 +215,7 @@ Deno.serve(async (req) => {
           failed++;
           continue;
         }
-        const send = await sendFlow(token, contactId, rem.whapify_flow_id);
+        const send = await sendFlow(token, contactId, settings.whapify_flow_id);
         if (send.ok) {
           await supabase.from("appointment_reminders").update({
             status: "sent",

@@ -19,6 +19,7 @@ function maskToken(t: string | null | undefined) {
 export function WhapifySettingsCard() {
   const qc = useQueryClient();
   const [tokenInput, setTokenInput] = useState("");
+  const [webhookDrafts, setWebhookDrafts] = useState<Record<string, string>>({});
 
   const { data: settings } = useQuery({
     queryKey: ["whapify-settings"],
@@ -91,7 +92,7 @@ export function WhapifySettingsCard() {
   });
 
   const updateReminder = useMutation({
-    mutationFn: async ({ id, patch }: { id: string; patch: { active?: boolean; whapify_flow_id?: string | null } }) => {
+    mutationFn: async ({ id, patch }: { id: string; patch: { active?: boolean; whapify_flow_id?: string | null; webhook_url?: string | null } }) => {
       const { error } = await supabase.from("reminder_settings").update(patch).eq("id", id);
       if (error) throw error;
     },
@@ -178,7 +179,8 @@ export function WhapifySettingsCard() {
 
         <div className="space-y-3">
           {reminders.map((r) => {
-            const configured = Boolean(r.whapify_flow_id);
+            const configured = Boolean(r.whapify_flow_id) || Boolean(r.webhook_url);
+            const webhookDraft = webhookDrafts[r.id] ?? r.webhook_url ?? "";
             return (
               <div key={r.id} className="p-4 rounded-xl border bg-secondary/30 space-y-3">
                 <div className="flex items-center justify-between">
@@ -186,13 +188,15 @@ export function WhapifySettingsCard() {
                     <p className="font-medium">
                       {r.minutes_before >= 60 ? `${r.minutes_before / 60} hora${r.minutes_before / 60 > 1 ? "s" : ""}` : `${r.minutes_before} minutos`} antes
                     </p>
-                    <p className="text-xs text-muted-foreground">Canal: Gestor de WhatsApp · Tipo: {r.reminder_type}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Canal: {r.webhook_url ? "Chat CharlIA" : "Gestor de WhatsApp"} · Tipo: {r.reminder_type}
+                    </p>
                   </div>
                   <div className="flex items-center gap-2">
                     {configured ? (
                       <Badge variant="default" className="gap-1"><CheckCircle2 className="w-3 h-3" /> Configurado</Badge>
                     ) : (
-                      <Badge variant="outline" className="gap-1"><AlertCircle className="w-3 h-3" /> Sin flow</Badge>
+                      <Badge variant="outline" className="gap-1"><AlertCircle className="w-3 h-3" /> Sin destino</Badge>
                     )}
                     <Switch
                       checked={r.active}
@@ -203,7 +207,28 @@ export function WhapifySettingsCard() {
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-xs">Flow de Gestor de WhatsApp</Label>
+                  <Label className="text-xs">Webhook de Chat CharlIA (recomendado — plantillas reales de Meta)</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="https://.../api/webhooks/appointment-reminder/…"
+                      value={webhookDraft}
+                      onChange={(e) => setWebhookDrafts((prev) => ({ ...prev, [r.id]: e.target.value }))}
+                    />
+                    <Button
+                      variant="outline"
+                      onClick={() => updateReminder.mutate({ id: r.id, patch: { webhook_url: webhookDraft.trim() || null } })}
+                      disabled={updateReminder.isPending}
+                    >
+                      Guardar
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Si se configura, este recordatorio se envía por Chat CharlIA en vez de Gestor de WhatsApp.
+                  </p>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs">Flow de Gestor de WhatsApp (alternativa)</Label>
                   <Select
                     value={r.whapify_flow_id ?? ""}
                     onValueChange={(v) => updateReminder.mutate({ id: r.id, patch: { whapify_flow_id: v || null } })}

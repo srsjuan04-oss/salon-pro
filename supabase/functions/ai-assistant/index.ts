@@ -127,6 +127,10 @@ Deno.serve(async (req) => {
       organizationId = waSettings?.organization_id ?? null;
     }
 
+    // Moneda del negocio (configurable en Configuración → Bloques de la agenda); COP por
+    // defecto para no romper el comportamiento de organizaciones ya existentes.
+    let currency = "COP";
+
     if (organizationId) {
       const monthStart = new Date();
       monthStart.setUTCDate(1);
@@ -140,11 +144,12 @@ Deno.serve(async (req) => {
           .gte("created_at", monthStart.toISOString()),
         supabase
           .from("organizations")
-          .select("ai_monthly_cap_usd")
+          .select("ai_monthly_cap_usd, currency")
           .eq("id", organizationId)
           .maybeSingle(),
       ]);
 
+      currency = org?.currency ?? "COP";
       const monthlySpend = (usageRows ?? []).reduce((sum, r) => sum + Number(r.cost_usd), 0);
       const monthlyCap = org?.ai_monthly_cap_usd ?? DEFAULT_MONTHLY_AI_CAP_USD;
 
@@ -171,7 +176,7 @@ INFORMACIÓN DEL NEGOCIO:
 - Hoy es ${dayNames[today.getDay()]} ${today.toLocaleDateString("es-MX")}
 
 SERVICIOS DISPONIBLES:
-${services.map(s => `- ${s.name}: $${s.price} MXN (${s.duration_minutes} min)`).join("\n")}
+${services.map(s => `- ${s.name}: $${s.price} ${currency} (${s.duration_minutes} min)`).join("\n")}
 
 BARBEROS DISPONIBLES:
 ${barbers.map(b => `- ${b.name}${b.specialty ? ` (Especialidad: ${b.specialty})` : ""}`).join("\n")}
@@ -199,6 +204,7 @@ INSTRUCCIONES:
 7. Responde siempre en español de México
 8. Sé conciso pero amable (máximo 3-4 líneas por respuesta)
 9. Usa emojis con moderación (💈, ✂️, 📅, ✅, 🔄)
+10. NUNCA uses formato Markdown (nada de **negrilla** con doble asterisco, ni # títulos, ni listas con guiones). WhatsApp no lo interpreta y el cliente vería los símbolos tal cual. Si necesitas resaltar algo, usa *negrilla* con un solo asterisco (formato nativo de WhatsApp) o simplemente texto plano.
 
 FLUJO DE AGENDADO:
 1. Recopilar: servicio, barbero, fecha, hora
@@ -396,7 +402,7 @@ ${conversation_context ? `CONTEXTO DE LA CONVERSACIÓN:\n${conversation_context}
               } else {
                 action = { type: "booking_created", appointment };
                 const formattedDate = new Date(date + "T12:00:00").toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" });
-                cleanResponse = `✅ ¡Cita agendada con éxito!\n\n📅 ${formattedDate} a las ${time}\n💈 ${service.name} con ${barber.name}\n💵 $${service.price} MXN\n\n¡Te esperamos! 🙌`;
+                cleanResponse = `✅ ¡Cita agendada con éxito!\n\n📅 ${formattedDate} a las ${time}\n💈 ${service.name} con ${barber.name}\n💵 $${service.price} ${currency}\n\n¡Te esperamos! 🙌`;
               }
             }
           }

@@ -27,6 +27,20 @@ const TIMEZONES = [
   { value: "Europe/Madrid", label: "Madrid (GMT+1/+2)" },
 ];
 
+const CURRENCIES = [
+  { value: "COP", label: "Peso colombiano (COP)" },
+  { value: "MXN", label: "Peso mexicano (MXN)" },
+  { value: "USD", label: "Dólar estadounidense (USD)" },
+  { value: "ARS", label: "Peso argentino (ARS)" },
+  { value: "CLP", label: "Peso chileno (CLP)" },
+  { value: "PEN", label: "Sol peruano (PEN)" },
+  { value: "GTQ", label: "Quetzal guatemalteco (GTQ)" },
+  { value: "BOB", label: "Boliviano (BOB)" },
+  { value: "UYU", label: "Peso uruguayo (UYU)" },
+  { value: "BRL", label: "Real brasileño (BRL)" },
+  { value: "EUR", label: "Euro (EUR)" },
+];
+
 export function ScheduleSettingsCard() {
   const queryClient = useQueryClient();
   const [loading, setLoading] = useState(true);
@@ -38,6 +52,8 @@ export function ScheduleSettingsCard() {
   const [orgId, setOrgId] = useState<string | null>(null);
   const [timezone, setTimezone] = useState("America/Bogota");
   const [savingTz, setSavingTz] = useState(false);
+  const [currency, setCurrency] = useState("COP");
+  const [savingCurrency, setSavingCurrency] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -47,7 +63,7 @@ export function ScheduleSettingsCard() {
           .select("id, day_start, day_end, slot_minutes")
           .limit(1)
           .maybeSingle(),
-        supabase.from("organizations").select("id, timezone").limit(1).maybeSingle(),
+        supabase.from("organizations").select("id, timezone, currency").limit(1).maybeSingle(),
       ]);
       if (data) {
         setId(data.id);
@@ -58,6 +74,7 @@ export function ScheduleSettingsCard() {
       if (org) {
         setOrgId(org.id);
         setTimezone(org.timezone ?? "America/Bogota");
+        setCurrency(org.currency ?? "COP");
       }
       setLoading(false);
     })();
@@ -76,6 +93,22 @@ export function ScheduleSettingsCard() {
       toast.error(error.message);
     } else {
       toast.success("Zona horaria actualizada. Los recordatorios de WhatsApp la usarán.");
+    }
+  };
+
+  const saveCurrency = async (value: string) => {
+    if (!orgId) return;
+    setCurrency(value);
+    setSavingCurrency(true);
+    const { error } = await supabase
+      .from("organizations")
+      .update({ currency: value })
+      .eq("id", orgId);
+    setSavingCurrency(false);
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success("Moneda actualizada. El asistente de IA la usará al hablar de precios.");
     }
   };
 
@@ -151,6 +184,28 @@ export function ScheduleSettingsCard() {
         </Select>
         <p className="text-xs text-muted-foreground">
           Se usa para calcular a qué hora se envían los recordatorios de citas por WhatsApp.
+        </p>
+      </div>
+
+      <div className="space-y-2 max-w-sm">
+        <Label className="flex items-center gap-2">
+          Moneda
+          {savingCurrency && <Loader2 className="w-3 h-3 animate-spin" />}
+        </Label>
+        <Select value={currency} onValueChange={saveCurrency} disabled={!orgId}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {CURRENCIES.map((c) => (
+              <SelectItem key={c.value} value={c.value}>
+                {c.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          El asistente de IA la menciona al hablar de precios de servicios con los clientes.
         </p>
       </div>
 
