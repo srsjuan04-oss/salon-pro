@@ -2,19 +2,13 @@ import { useState, useMemo } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Download, 
+import {
   DollarSign,
   Clock,
   CreditCard,
   CheckCircle2,
   AlertCircle,
   Plus,
-  Calendar,
-  CalendarDays,
-  CalendarRange,
-  ChevronLeft,
-  ChevronRight,
   Upload,
   History,
 } from "lucide-react";
@@ -22,14 +16,8 @@ import { CsvImportDialog } from "@/components/financial/CsvImportDialog";
 import { ImportHistoryDialog } from "@/components/financial/ImportHistoryDialog";
 import { toast } from "sonner";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
-import { format, subDays, subMonths, isWithinInterval, parseISO, startOfDay, endOfDay } from "date-fns";
+import { format, subMonths } from "date-fns";
 import { es } from "date-fns/locale";
-import { Calendar as CalendarComponent } from "@/components/ui/calendar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import {
   Dialog,
   DialogContent,
@@ -37,7 +25,6 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -47,9 +34,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useCreateSale, useMarkSaleAsPaid, useSales, type Sale } from "@/hooks/useSalesEntries";
 import { reportError } from "@/lib/errors";
+import { saleSchema } from "@/lib/schemas/sale";
+import { useDateRangeFilter } from "@/hooks/useDateRangeFilter";
+import { usePagination } from "@/hooks/usePagination";
+import { DateRangeFilterBar } from "@/components/shared/DateRangeFilterBar";
+import { PaginationControls } from "@/components/shared/PaginationControls";
+import { EntityFormDialog } from "@/components/shared/EntityFormDialog";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -66,16 +62,6 @@ const services = [
 
 const paymentMethods = ["Efectivo", "Tarjeta", "Transferencia"];
 
-type DateFilter = "today" | "yesterday" | "15days" | "30days" | "custom";
-
-const dateFilterLabels: Record<DateFilter, string> = {
-  today: "Hoy",
-  yesterday: "Ayer", 
-  "15days": "Últimos 15 días",
-  "30days": "Últimos 30 días",
-  custom: "Personalizado",
-};
-
 export default function SalesPage() {
   const { data: sales = [], refetch: refetchSales } = useSales();
   const createSale = useCreateSale();
@@ -84,53 +70,17 @@ export default function SalesPage() {
   const [importOpen, setImportOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("all");
-  const [dateFilter, setDateFilter] = useState<DateFilter>("30days");
-  const [customDateRange, setCustomDateRange] = useState<{
-    from: Date | undefined;
-    to: Date | undefined;
-  }>({ from: undefined, to: undefined });
-  const [formData, setFormData] = useState({
-    client: "",
-    service: "",
-    amount: "",
-    paymentMethod: "",
-  });
+
+  const {
+    dateFilter,
+    setDateFilter,
+    customDateRange,
+    setCustomDateRange,
+    filtered: dateFilteredSales,
+    label: dateRangeLabel,
+  } = useDateRangeFilter(sales, (s) => s.date);
 
   const today = new Date();
-
-  // Filtrar ventas por fecha
-  const dateFilteredSales = useMemo(() => {
-    return sales.filter(sale => {
-      const saleDate = parseISO(sale.date);
-      
-      switch (dateFilter) {
-        case "today":
-          return sale.date === format(today, "yyyy-MM-dd");
-        case "yesterday":
-          return sale.date === format(subDays(today, 1), "yyyy-MM-dd");
-        case "15days":
-          return isWithinInterval(saleDate, {
-            start: startOfDay(subDays(today, 14)),
-            end: endOfDay(today),
-          });
-        case "30days":
-          return isWithinInterval(saleDate, {
-            start: startOfDay(subDays(today, 29)),
-            end: endOfDay(today),
-          });
-        case "custom":
-          if (customDateRange.from && customDateRange.to) {
-            return isWithinInterval(saleDate, {
-              start: startOfDay(customDateRange.from),
-              end: endOfDay(customDateRange.to),
-            });
-          }
-          return true;
-        default:
-          return true;
-      }
-    });
-  }, [sales, dateFilter, customDateRange]);
 
   const paidSales = dateFilteredSales.filter(s => s.status === "paid");
   const pendingSales = dateFilteredSales.filter(s => s.status === "pending");
@@ -173,35 +123,6 @@ export default function SalesPage() {
 
 
 
-  const handleServiceChange = (serviceName: string) => {
-    const service = services.find(s => s.name === serviceName);
-    setFormData({ 
-      ...formData, 
-      service: serviceName, 
-      amount: service ? service.price.toString() : "" 
-    });
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.client || !formData.service || !formData.amount) {
-      toast.error("Completa todos los campos"); return;
-    }
-    try {
-      await createSale.mutateAsync({
-        client: formData.client,
-        service: formData.service,
-        amount: parseFloat(formData.amount),
-        paymentMethod: formData.paymentMethod,
-      });
-      toast.success("Venta registrada");
-      setIsDialogOpen(false);
-      setFormData({ client: "", service: "", amount: "", paymentMethod: "" });
-    } catch (error) {
-      await reportError(error);
-    }
-  };
-
   const markAsPaid = (saleId: string, method: string) => {
     markSaleAsPaid.mutate(
       { saleId, method },
@@ -209,32 +130,11 @@ export default function SalesPage() {
     );
   };
 
-
-  const filteredSales = activeTab === "all" 
-    ? dateFilteredSales 
-    : activeTab === "paid" 
-      ? paidSales 
+  const filteredSales = activeTab === "all"
+    ? dateFilteredSales
+    : activeTab === "paid"
+      ? paidSales
       : pendingSales;
-
-  const getDateRangeLabel = () => {
-    switch (dateFilter) {
-      case "today":
-        return format(today, "d 'de' MMMM, yyyy", { locale: es });
-      case "yesterday":
-        return format(subDays(today, 1), "d 'de' MMMM, yyyy", { locale: es });
-      case "15days":
-        return `${format(subDays(today, 14), "d MMM", { locale: es })} - ${format(today, "d MMM, yyyy", { locale: es })}`;
-      case "30days":
-        return `${format(subDays(today, 29), "d MMM", { locale: es })} - ${format(today, "d MMM, yyyy", { locale: es })}`;
-      case "custom":
-        if (customDateRange.from && customDateRange.to) {
-          return `${format(customDateRange.from, "d MMM", { locale: es })} - ${format(customDateRange.to, "d MMM, yyyy", { locale: es })}`;
-        }
-        return "Seleccionar fechas";
-      default:
-        return "";
-    }
-  };
 
   return (
     <DashboardLayout>
@@ -266,84 +166,14 @@ export default function SalesPage() {
         <CsvImportDialog open={importOpen} onOpenChange={setImportOpen} type="sales" onImported={() => refetchSales()} />
         <ImportHistoryDialog open={historyOpen} onOpenChange={setHistoryOpen} type="sales" />
 
-        {/* Date Filters */}
-        <div className="bg-card rounded-2xl border shadow-soft p-4">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant={dateFilter === "today" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setDateFilter("today")}
-                className={dateFilter === "today" ? "gradient-gold shadow-gold" : ""}
-              >
-                <Calendar className="w-4 h-4 mr-2" />
-                Hoy
-              </Button>
-              <Button
-                variant={dateFilter === "yesterday" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setDateFilter("yesterday")}
-                className={dateFilter === "yesterday" ? "gradient-gold shadow-gold" : ""}
-              >
-                <Calendar className="w-4 h-4 mr-2" />
-                Ayer
-              </Button>
-              <Button
-                variant={dateFilter === "15days" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setDateFilter("15days")}
-                className={dateFilter === "15days" ? "gradient-gold shadow-gold" : ""}
-              >
-                <CalendarDays className="w-4 h-4 mr-2" />
-                15 días
-              </Button>
-              <Button
-                variant={dateFilter === "30days" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setDateFilter("30days")}
-                className={dateFilter === "30days" ? "gradient-gold shadow-gold" : ""}
-              >
-                <CalendarDays className="w-4 h-4 mr-2" />
-                30 días
-              </Button>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant={dateFilter === "custom" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setDateFilter("custom")}
-                    className={dateFilter === "custom" ? "gradient-gold shadow-gold" : ""}
-                  >
-                    <CalendarRange className="w-4 h-4 mr-2" />
-                    Personalizado
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <CalendarComponent
-                    mode="range"
-                    selected={{ from: customDateRange.from, to: customDateRange.to }}
-                    onSelect={(range) => {
-                      setCustomDateRange({ from: range?.from, to: range?.to });
-                      setDateFilter("custom");
-                    }}
-                    numberOfMonths={2}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-            
-            <div className="flex items-center gap-2 text-sm">
-              <Badge variant="secondary" className="gap-1 py-1.5 px-3">
-                <CalendarDays className="w-3.5 h-3.5" />
-                {getDateRangeLabel()}
-              </Badge>
-              <Badge variant="outline" className="py-1.5 px-3">
-                {dateFilteredSales.length} ventas
-              </Badge>
-            </div>
-          </div>
-        </div>
+        <DateRangeFilterBar
+          dateFilter={dateFilter}
+          onDateFilterChange={setDateFilter}
+          customDateRange={customDateRange}
+          onCustomDateRangeChange={setCustomDateRange}
+          label={dateRangeLabel}
+          countLabel={`${dateFilteredSales.length} ventas`}
+        />
 
         {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -506,95 +336,115 @@ export default function SalesPage() {
         </div>
       </div>
 
-      {/* Dialog Nueva Venta */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>Registrar Nueva Venta</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="client">Cliente</Label>
-              <Input
-                id="client"
-                placeholder="Nombre del cliente"
-                value={formData.client}
-                onChange={(e) => setFormData({ ...formData, client: e.target.value })}
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="service">Servicio</Label>
-              <Select
-                value={formData.service}
-                onValueChange={handleServiceChange}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar servicio" />
-                </SelectTrigger>
-                <SelectContent>
-                  {services.map((service) => (
-                    <SelectItem key={service.name} value={service.name}>
-                      <div className="flex items-center justify-between w-full gap-4">
-                        <span>{service.name}</span>
-                        <span className="text-muted-foreground">${service.price}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="amount">Monto ($)</Label>
-              <Input
-                id="amount"
-                type="number"
-                placeholder="0.00"
-                value={formData.amount}
-                onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                required
-              />
-              <p className="text-xs text-muted-foreground">El precio se ajusta automáticamente al seleccionar servicio</p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="payment">Método de pago</Label>
-              <Select
-                value={formData.paymentMethod}
-                onValueChange={(value) => setFormData({ ...formData, paymentMethod: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar método (opcional si pendiente)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pending">
-                    <div className="flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-warning" />
-                      Dejar como pendiente
-                    </div>
-                  </SelectItem>
-                  {paymentMethods.map((method) => (
-                    <SelectItem key={method} value={method}>
-                      {method}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit" className="gradient-gold shadow-gold">
-                Registrar Venta
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <EntityFormDialog<typeof saleSchema>
+        open={isDialogOpen}
+        onOpenChange={setIsDialogOpen}
+        title="Registrar Nueva Venta"
+        schema={saleSchema}
+        defaultValues={{ client: "", service: "", amount: "" as unknown as number, paymentMethod: "" }}
+        onSubmit={async (values) => {
+          await createSale.mutateAsync(values);
+          toast.success("Venta registrada");
+        }}
+        submitLabel="Registrar Venta"
+        className="sm:max-w-[500px]"
+      >
+        {(form) => (
+          <>
+            <FormField
+              control={form.control}
+              name="client"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Cliente</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Nombre del cliente" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="service"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Servicio</FormLabel>
+                  <Select
+                    value={field.value}
+                    onValueChange={(value) => {
+                      field.onChange(value);
+                      const service = services.find((s) => s.name === value);
+                      form.setValue("amount", (service?.price ?? "") as unknown as number);
+                    }}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar servicio" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {services.map((service) => (
+                        <SelectItem key={service.name} value={service.name}>
+                          <div className="flex items-center justify-between w-full gap-4">
+                            <span>{service.name}</span>
+                            <span className="text-muted-foreground">${service.price}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="amount"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Monto ($)</FormLabel>
+                  <FormControl>
+                    <Input type="number" placeholder="0.00" {...field} />
+                  </FormControl>
+                  <p className="text-xs text-muted-foreground">El precio se ajusta automáticamente al seleccionar servicio</p>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="paymentMethod"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Método de pago</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar método (opcional si pendiente)" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="pending">
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-4 h-4 text-warning" />
+                          Dejar como pendiente
+                        </div>
+                      </SelectItem>
+                      {paymentMethods.map((method) => (
+                        <SelectItem key={method} value={method}>
+                          {method}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </>
+        )}
+      </EntityFormDialog>
     </DashboardLayout>
   );
 }
@@ -607,13 +457,15 @@ interface SalesTableProps {
 function SalesTable({ sales, onMarkAsPaid }: SalesTableProps) {
   const [paymentDialog, setPaymentDialog] = useState<string | null>(null);
   const [selectedMethod, setSelectedMethod] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
 
-  const totalPages = Math.ceil(sales.length / ITEMS_PER_PAGE);
-  const paginatedSales = sales.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
-  );
+  const {
+    page: currentPage,
+    setPage: setCurrentPage,
+    totalPages,
+    pageItems: paginatedSales,
+    rangeStart,
+    rangeEnd,
+  } = usePagination(sales, ITEMS_PER_PAGE);
 
   const handleConfirmPayment = () => {
     if (paymentDialog && selectedMethod) {
@@ -623,43 +475,36 @@ function SalesTable({ sales, onMarkAsPaid }: SalesTableProps) {
     }
   };
 
-  // Reset page when sales change
-  useMemo(() => {
-    setCurrentPage(1);
-  }, [sales.length]);
-
   return (
     <>
       <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-border">
-              <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">#</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Cliente</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Servicio</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground hidden md:table-cell">Staff</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground hidden sm:table-cell">Fecha</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Estado</th>
-              <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Monto</th>
-              <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Acción</th>
-            </tr>
-          </thead>
-          <tbody>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>#</TableHead>
+              <TableHead>Cliente</TableHead>
+              <TableHead>Servicio</TableHead>
+              <TableHead className="hidden md:table-cell">Staff</TableHead>
+              <TableHead className="hidden sm:table-cell">Fecha</TableHead>
+              <TableHead>Estado</TableHead>
+              <TableHead className="text-right">Monto</TableHead>
+              <TableHead className="text-right">Acción</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {paginatedSales.map((sale, index) => (
-              <tr key={sale.id} className="border-b border-border last:border-0 hover:bg-secondary/30 transition-colors">
-                <td className="py-4 px-4 text-sm text-muted-foreground">
+              <TableRow key={sale.id}>
+                <TableCell className="text-sm text-muted-foreground">
                   {(currentPage - 1) * ITEMS_PER_PAGE + index + 1}
-                </td>
-                <td className="py-4 px-4">
-                  <p className="font-medium">{sale.client}</p>
-                </td>
-                <td className="py-4 px-4 text-muted-foreground">{sale.service}</td>
-                <td className="py-4 px-4 text-muted-foreground hidden md:table-cell">{sale.stylist}</td>
-                <td className="py-4 px-4 text-sm text-muted-foreground hidden sm:table-cell">
+                </TableCell>
+                <TableCell className="font-medium">{sale.client}</TableCell>
+                <TableCell className="text-muted-foreground">{sale.service}</TableCell>
+                <TableCell className="text-muted-foreground hidden md:table-cell">{sale.stylist}</TableCell>
+                <TableCell className="text-sm text-muted-foreground hidden sm:table-cell">
                   <div>{sale.date}</div>
                   <div className="text-xs">{sale.time}</div>
-                </td>
-                <td className="py-4 px-4">
+                </TableCell>
+                <TableCell>
                   {sale.status === "paid" ? (
                     <Badge className="bg-success/10 text-success border-success/20 gap-1">
                       <CheckCircle2 className="w-3 h-3" />
@@ -671,18 +516,20 @@ function SalesTable({ sales, onMarkAsPaid }: SalesTableProps) {
                       Pendiente
                     </Badge>
                   )}
-                </td>
-                <td className={cn(
-                  "py-4 px-4 text-right font-semibold",
-                  sale.status === "paid" ? "text-success" : "text-warning"
-                )}>
+                </TableCell>
+                <TableCell
+                  className={cn(
+                    "text-right font-semibold",
+                    sale.status === "paid" ? "text-success" : "text-warning"
+                  )}
+                >
                   ${sale.amount.toLocaleString()}
-                </td>
-                <td className="py-4 px-4 text-right">
+                </TableCell>
+                <TableCell className="text-right">
                   {sale.status === "pending" ? (
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
+                    <Button
+                      size="sm"
+                      variant="outline"
                       className="gap-1"
                       onClick={() => setPaymentDialog(sale.id)}
                     >
@@ -694,64 +541,22 @@ function SalesTable({ sales, onMarkAsPaid }: SalesTableProps) {
                       {sale.method}
                     </Badge>
                   )}
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
-          <p className="text-sm text-muted-foreground">
-            Mostrando {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, sales.length)} de {sales.length}
-          </p>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </Button>
-            <div className="flex items-center gap-1">
-              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                let pageNum: number;
-                if (totalPages <= 5) {
-                  pageNum = i + 1;
-                } else if (currentPage <= 3) {
-                  pageNum = i + 1;
-                } else if (currentPage >= totalPages - 2) {
-                  pageNum = totalPages - 4 + i;
-                } else {
-                  pageNum = currentPage - 2 + i;
-                }
-                return (
-                  <Button
-                    key={pageNum}
-                    variant={currentPage === pageNum ? "default" : "outline"}
-                    size="sm"
-                    className={cn("w-8 h-8 p-0", currentPage === pageNum && "gradient-gold shadow-gold")}
-                    onClick={() => setCurrentPage(pageNum)}
-                  >
-                    {pageNum}
-                  </Button>
-                );
-              })}
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
-            >
-              <ChevronRight className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
-      )}
+      <PaginationControls
+        page={currentPage}
+        totalPages={totalPages}
+        onPageChange={setCurrentPage}
+        rangeStart={rangeStart}
+        rangeEnd={rangeEnd}
+        total={sales.length}
+        itemLabel="ventas"
+      />
 
       {/* Payment Dialog */}
       <Dialog open={!!paymentDialog} onOpenChange={(open) => !open && setPaymentDialog(null)}>
@@ -780,7 +585,7 @@ function SalesTable({ sales, onMarkAsPaid }: SalesTableProps) {
             <Button type="button" variant="outline" onClick={() => setPaymentDialog(null)}>
               Cancelar
             </Button>
-            <Button 
+            <Button
               className="gradient-gold shadow-gold"
               onClick={handleConfirmPayment}
               disabled={!selectedMethod}
