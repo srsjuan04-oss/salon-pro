@@ -1,27 +1,10 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Plus, Clock, Loader2, Phone, MessageSquare, CreditCard, User, Scissors, DollarSign } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Clock, Loader2, MessageSquare, CreditCard, User, Scissors, DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { format, addDays, startOfWeek, isSameDay } from "date-fns";
 import { es } from "date-fns/locale";
@@ -40,6 +23,11 @@ import { useScheduleSettings } from "@/hooks/useScheduleSettings";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/hooks/useAuth";
 import { reportError } from "@/lib/errors";
+import type { AppointmentFormValues } from "@/lib/schemas/appointment";
+import { AppointmentStatusBadge } from "@/components/calendar/AppointmentStatusBadge";
+import { NewAppointmentDialog } from "@/components/calendar/NewAppointmentDialog";
+import { AppointmentDetailDialog } from "@/components/calendar/AppointmentDetailDialog";
+import { CancelAppointmentDialog } from "@/components/calendar/CancelAppointmentDialog";
 
 const HOUR_PX = 80;
 
@@ -60,9 +48,7 @@ export default function CalendarPage() {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [isCancelOpen, setIsCancelOpen] = useState(false);
-  const [cancelReason, setCancelReason] = useState("");
-  const [cancelPreset, setCancelPreset] = useState("");
-  
+
   const isMobile = useIsMobile();
   const formattedDate = format(selectedDate, "yyyy-MM-dd");
   
@@ -87,31 +73,9 @@ export default function CalendarPage() {
     () => Array.from({ length: Math.max(1, endHour - startHour) }, (_, i) => i + startHour),
     [startHour, endHour]
   );
-  const timeSlots = useMemo(() => {
-    const out: string[] = [];
-    const startMin = startHour * 60;
-    const endMin = endHour * 60;
-    for (let m = startMin; m + slotMinutes <= endMin; m += slotMinutes) {
-      out.push(
-        `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`
-      );
-    }
-    return out;
-  }, [startHour, endHour, slotMinutes]);
-  
   const createAppointment = useCreateAppointment();
   const updateAppointment = useUpdateAppointment();
   const createCustomer = useCreateCustomer();
-
-  const [formData, setFormData] = useState({
-    customerId: "",
-    newCustomerName: "",
-    newCustomerPhone: "",
-    serviceId: "",
-    barberId: "",
-    time: "",
-    notes: "",
-  });
 
   useAppointmentsRealtimeSync();
 
@@ -134,63 +98,39 @@ export default function CalendarPage() {
     return staffColors[index % staffColors.length];
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCreateAppointment = async (values: AppointmentFormValues) => {
+    let customerId = values.customerId;
 
-    if (!formData.serviceId || !formData.barberId || !formData.time) {
-      toast.error("Completa todos los campos requeridos");
-      return;
+    if (!customerId && values.newCustomerName && values.newCustomerPhone) {
+      const newCustomer = await createCustomer.mutateAsync({
+        name: values.newCustomerName,
+        phone: values.newCustomerPhone,
+      });
+      customerId = newCustomer.id;
     }
 
-    try {
-      let customerId = formData.customerId;
-
-      // Create new customer if needed
-      if (!customerId && formData.newCustomerName && formData.newCustomerPhone) {
-        const newCustomer = await createCustomer.mutateAsync({
-          name: formData.newCustomerName,
-          phone: formData.newCustomerPhone,
-        });
-        customerId = newCustomer.id;
-      }
-
-      if (!customerId) {
-        toast.error("Selecciona o crea un cliente");
-        return;
-      }
-
-      const service = services?.find((s) => s.id === formData.serviceId);
-      const [hours, minutes] = formData.time.split(":").map(Number);
-      const endMinutes = hours * 60 + minutes + (service?.duration_minutes || 30);
-      const endTime = `${Math.floor(endMinutes / 60).toString().padStart(2, "0")}:${(endMinutes % 60).toString().padStart(2, "0")}`;
-
-      await createAppointment.mutateAsync({
-        customer_id: customerId,
-        barber_id: formData.barberId,
-        service_id: formData.serviceId,
-        appointment_date: formattedDate,
-        start_time: formData.time,
-        end_time: endTime,
-        notes: formData.notes,
-        status: "confirmed",
-        source: "manual",
-      });
-
-      toast.success("Cita agendada correctamente");
-      setIsDialogOpen(false);
-      setFormData({
-        customerId: "",
-        newCustomerName: "",
-        newCustomerPhone: "",
-        serviceId: "",
-        barberId: "",
-        time: "",
-        notes: "",
-      });
-    } catch (error) {
-      console.error(error);
-      toast.error("Error al agendar la cita");
+    if (!customerId) {
+      throw new Error("Selecciona o crea un cliente");
     }
+
+    const service = services?.find((s) => s.id === values.serviceId);
+    const [hours, minutes] = values.time.split(":").map(Number);
+    const endMinutes = hours * 60 + minutes + (service?.duration_minutes || 30);
+    const endTime = `${Math.floor(endMinutes / 60).toString().padStart(2, "0")}:${(endMinutes % 60).toString().padStart(2, "0")}`;
+
+    await createAppointment.mutateAsync({
+      customer_id: customerId,
+      barber_id: values.barberId,
+      service_id: values.serviceId,
+      appointment_date: formattedDate,
+      start_time: values.time,
+      end_time: endTime,
+      notes: values.notes,
+      status: "confirmed",
+      source: "manual",
+    });
+
+    toast.success("Cita agendada correctamente");
   };
 
   const handleStatusChange = async (appointmentId: string, status: string) => {
@@ -199,40 +139,21 @@ export default function CalendarPage() {
       toast.success(`Cita ${status === "completed" ? "completada" : status === "cancelled" ? "cancelada" : "actualizada"}`);
       setIsDetailOpen(false);
     } catch (error) {
-      toast.error("Error al actualizar la cita");
+      await reportError(error, "Error al actualizar la cita");
     }
   };
 
-  const CANCEL_REASONS = [
-    "Cliente canceló",
-    "Cliente no asistió",
-    "Reprogramación solicitada",
-    "Barbero no disponible",
-    "Error al agendar",
-    "Otro",
-  ];
-
-  const handleConfirmCancel = async () => {
+  const handleConfirmCancel = async (reason: string) => {
     if (!selectedAppointment) return;
-    const reason = cancelPreset === "Otro" || !cancelPreset ? cancelReason.trim() : cancelPreset;
-    if (!reason) {
-      toast.error("Indica el motivo de la cancelación");
-      return;
-    }
     try {
       await updateAppointment.mutateAsync({
         id: selectedAppointment.id,
         status: "cancelled",
-        cancellation_reason:
-          cancelPreset && cancelPreset !== "Otro" && cancelReason.trim()
-            ? `${cancelPreset} — ${cancelReason.trim()}`
-            : reason,
+        cancellation_reason: reason,
       });
       toast.success("Cita cancelada");
       setIsCancelOpen(false);
       setIsDetailOpen(false);
-      setCancelReason("");
-      setCancelPreset("");
     } catch (error) {
       await reportError(error, "Error al cancelar la cita");
     }
@@ -396,16 +317,7 @@ export default function CalendarPage() {
                           </span>
                         </div>
                       </div>
-                      <Badge
-                        variant="outline"
-                        className="shrink-0 text-[10px] capitalize"
-                      >
-                        {apt.status === "completed"
-                          ? "Completada"
-                          : apt.status === "cancelled"
-                          ? "Cancelada"
-                          : "Pendiente"}
-                      </Badge>
+                      <AppointmentStatusBadge status={apt.status} className="shrink-0 text-[10px]" />
                     </button>
                   );
                 })
@@ -699,281 +611,26 @@ export default function CalendarPage() {
       </div>
 
 
-      {/* New Appointment Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Nueva Cita</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label>Cliente</Label>
-              <Select
-                value={formData.customerId}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, customerId: value, newCustomerName: "", newCustomerPhone: "" })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar cliente existente" />
-                </SelectTrigger>
-                <SelectContent>
-                  {customers?.map((customer) => (
-                    <SelectItem key={customer.id} value={customer.id}>
-                      {customer.name} - {customer.phone}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+      <NewAppointmentDialog
+        open={isDialogOpen}
+        onOpenChange={setIsDialogOpen}
+        customers={customers ?? []}
+        services={services ?? []}
+        barbers={barbers ?? []}
+        onSubmit={handleCreateAppointment}
+      />
 
-            {!formData.customerId && (
-              <div className="space-y-2 p-3 rounded-lg bg-secondary/50">
-                <p className="text-sm font-medium">O crear nuevo cliente:</p>
-                <Input
-                  placeholder="Nombre del cliente"
-                  value={formData.newCustomerName}
-                  onChange={(e) =>
-                    setFormData({ ...formData, newCustomerName: e.target.value })
-                  }
-                />
-                <Input
-                  placeholder="Teléfono"
-                  value={formData.newCustomerPhone}
-                  onChange={(e) =>
-                    setFormData({ ...formData, newCustomerPhone: e.target.value })
-                  }
-                />
-              </div>
-            )}
+      <AppointmentDetailDialog
+        open={isDetailOpen}
+        onOpenChange={setIsDetailOpen}
+        appointment={selectedAppointment}
+        isBarber={isBarber}
+        isUpdating={updateAppointment.isPending}
+        onComplete={() => selectedAppointment && handleStatusChange(selectedAppointment.id, "completed")}
+        onRequestCancel={() => setIsCancelOpen(true)}
+      />
 
-            <div className="space-y-2">
-              <Label>Servicio *</Label>
-              <Select
-                value={formData.serviceId}
-                onValueChange={(value) => setFormData({ ...formData, serviceId: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar servicio" />
-                </SelectTrigger>
-                <SelectContent>
-                  {services?.map((service) => (
-                    <SelectItem key={service.id} value={service.id}>
-                      {service.name} - ${service.price} ({service.duration_minutes} min)
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Barbero *</Label>
-              <Select
-                value={formData.barberId}
-                onValueChange={(value) => setFormData({ ...formData, barberId: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar barbero" />
-                </SelectTrigger>
-                <SelectContent>
-                  {barbers?.map((barber) => (
-                    <SelectItem key={barber.id} value={barber.id}>
-                      {barber.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Hora *</Label>
-              <Input
-                type="time"
-                value={formData.time}
-                onChange={(e) => setFormData({ ...formData, time: e.target.value })}
-                step={60}
-              />
-              <p className="text-xs text-muted-foreground">
-                Puedes elegir cualquier hora manualmente.
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Notas</Label>
-              <Textarea
-                placeholder="Notas adicionales..."
-                value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              />
-            </div>
-
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                Cancelar
-              </Button>
-              <Button
-                type="submit"
-                className="gradient-gold"
-                disabled={createAppointment.isPending}
-              >
-                {createAppointment.isPending ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  "Agendar Cita"
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Appointment Detail Dialog */}
-      <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Detalle de Cita</DialogTitle>
-          </DialogHeader>
-          {selectedAppointment && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center font-semibold text-primary">
-                  {selectedAppointment.customer?.name?.charAt(0) || "C"}
-                </div>
-                <div>
-                  <p className="font-semibold">{selectedAppointment.customer?.name || "Cliente"}</p>
-                  <p className="text-sm text-muted-foreground flex items-center gap-1">
-                    <Phone className="w-3 h-3" />
-                    {selectedAppointment.customer?.phone}
-                  </p>
-                </div>
-                <Badge
-                  className={cn(
-                    "ml-auto",
-                    selectedAppointment.status === "completed" && "bg-success",
-                    selectedAppointment.status === "cancelled" && "bg-destructive",
-                    selectedAppointment.status === "confirmed" && "bg-primary"
-                  )}
-                >
-                  {selectedAppointment.status === "completed"
-                    ? "Completada"
-                    : selectedAppointment.status === "cancelled"
-                    ? "Cancelada"
-                    : "Confirmada"}
-                </Badge>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 p-4 rounded-lg bg-secondary/30">
-                <div>
-                  <p className="text-xs text-muted-foreground">Servicio</p>
-                  <p className="font-medium">{selectedAppointment.service?.name}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Precio</p>
-                  <p className="font-medium">${selectedAppointment.service?.price}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Barbero</p>
-                  <p className="font-medium">{selectedAppointment.barber?.name}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Hora</p>
-                  <p className="font-medium">
-                    {selectedAppointment.start_time.slice(0, 5)} - {selectedAppointment.end_time.slice(0, 5)}
-                  </p>
-                </div>
-                {selectedAppointment.source === "whatsapp" && (
-                  <div className="col-span-2">
-                    <Badge variant="outline" className="gap-1">
-                      <MessageSquare className="w-3 h-3" />
-                      Reservado por WhatsApp
-                    </Badge>
-                  </div>
-                )}
-              </div>
-
-              {selectedAppointment.notes && (
-                <div className="p-3 rounded-lg bg-muted">
-                  <p className="text-xs text-muted-foreground mb-1">Notas</p>
-                  <p className="text-sm">{selectedAppointment.notes}</p>
-                </div>
-              )}
-
-              {(selectedAppointment as any).cancellation_reason && (
-                <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20">
-                  <p className="text-xs text-muted-foreground mb-1">Motivo de cancelación</p>
-                  <p className="text-sm">{(selectedAppointment as any).cancellation_reason}</p>
-                </div>
-              )}
-
-              {!isBarber && selectedAppointment.status !== "cancelled" && selectedAppointment.status !== "completed" && (
-                <DialogFooter className="gap-2">
-                  <Button
-                    variant="destructive"
-                    onClick={() => {
-                      setCancelPreset("");
-                      setCancelReason("");
-                      setIsCancelOpen(true);
-                    }}
-                    disabled={updateAppointment.isPending}
-                  >
-                    Cancelar Cita
-                  </Button>
-                  <Button
-                    className="gradient-gold"
-                    onClick={() => handleStatusChange(selectedAppointment.id, "completed")}
-                    disabled={updateAppointment.isPending}
-                  >
-                    Marcar Completada
-                  </Button>
-                </DialogFooter>
-              )}
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Cancel reason dialog */}
-      <Dialog open={isCancelOpen} onOpenChange={setIsCancelOpen}>
-        <DialogContent className="sm:max-w-[440px]">
-          <DialogHeader>
-            <DialogTitle>Motivo de la cancelación</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Motivo</Label>
-              <Select value={cancelPreset} onValueChange={setCancelPreset}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecciona un motivo" />
-                </SelectTrigger>
-                <SelectContent>
-                  {CANCEL_REASONS.map((r) => (
-                    <SelectItem key={r} value={r}>
-                      {r}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Detalle {cancelPreset === "Otro" || !cancelPreset ? "(obligatorio)" : "(opcional)"}</Label>
-              <Textarea
-                value={cancelReason}
-                onChange={(e) => setCancelReason(e.target.value)}
-                placeholder="Describe brevemente el motivo..."
-                rows={3}
-              />
-            </div>
-          </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setIsCancelOpen(false)}>
-              Volver
-            </Button>
-            <Button variant="destructive" onClick={handleConfirmCancel}>
-              Confirmar cancelación
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <CancelAppointmentDialog open={isCancelOpen} onOpenChange={setIsCancelOpen} onConfirm={handleConfirmCancel} />
 
     </DashboardLayout>
   );
