@@ -20,6 +20,7 @@ import {
   Appointment,
 } from "@/hooks/useAppointments";
 import { useScheduleSettings } from "@/hooks/useScheduleSettings";
+import { getEffectiveDaySchedule, useBarberSchedules } from "@/hooks/useBarberSchedules";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/hooks/useAuth";
 import { reportError } from "@/lib/errors";
@@ -57,7 +58,32 @@ export default function CalendarPage() {
   const { data: services } = useServices();
   const { data: customers } = useCustomers();
   const { data: schedule } = useScheduleSettings();
+  const { data: barberSchedules } = useBarberSchedules();
   const { isBarber, user } = useAuth();
+
+  const selectedWeekday = selectedDate.getDay();
+  const generalHours = {
+    start: schedule?.day_start ?? "10:00",
+    end: schedule?.day_end ?? "20:00",
+  };
+
+  // Horario efectivo de cada barbero para el día seleccionado: usa su
+  // horario propio si lo configuró (Staff > Horario), si no cae al horario
+  // general del salón.
+  const barberDaySchedule = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof getEffectiveDaySchedule>>();
+    (barbers ?? []).forEach((b) => {
+      map.set(b.id, getEffectiveDaySchedule(barberSchedules, b.id, selectedWeekday, generalHours));
+    });
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [barbers, barberSchedules, selectedWeekday, generalHours.start, generalHours.end]);
+
+  // Solo se puede agendar con barberos que trabajan ese día de la semana.
+  const workingBarbers = useMemo(
+    () => (barbers ?? []).filter((b) => barberDaySchedule.get(b.id)?.isWorking !== false),
+    [barbers, barberDaySchedule],
+  );
 
   // Un barbero solo ve su propia columna en el calendario (las citas ya llegan
   // filtradas por RLS; esto evita mostrar columnas vacías de otros barberos).
@@ -66,8 +92,21 @@ export default function CalendarPage() {
     return (barbers ?? []).filter((b) => b.user_id === user?.id);
   }, [barbers, isBarber, user]);
 
-  const startHour = schedule ? parseInt(schedule.day_start.split(":")[0], 10) : 10;
-  const endHour = schedule ? parseInt(schedule.day_end.split(":")[0], 10) : 20;
+  // El rango visible de la grilla cubre el horario de todos los barberos
+  // mostrados ese día (no solo el general), para que ningún barbero con
+  // horario extendido quede recortado.
+  const { startHour, endHour } = useMemo(() => {
+    let minStart = parseInt(generalHours.start.split(":")[0], 10);
+    let maxEnd = parseInt(generalHours.end.split(":")[0], 10);
+    (displayBarbers ?? []).forEach((b) => {
+      const day = barberDaySchedule.get(b.id);
+      if (!day?.isWorking) return;
+      minStart = Math.min(minStart, parseInt(day.start.split(":")[0], 10));
+      maxEnd = Math.max(maxEnd, parseInt(day.end.split(":")[0], 10));
+    });
+    return { startHour: minStart, endHour: maxEnd };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayBarbers, barberDaySchedule, generalHours.start, generalHours.end]);
   const slotMinutes = schedule?.slot_minutes ?? 40;
   const hours = useMemo(
     () => Array.from({ length: Math.max(1, endHour - startHour) }, (_, i) => i + startHour),
@@ -117,6 +156,15 @@ export default function CalendarPage() {
     const [hours, minutes] = values.time.split(":").map(Number);
     const endMinutes = hours * 60 + minutes + (service?.duration_minutes || 30);
     const endTime = `${Math.floor(endMinutes / 60).toString().padStart(2, "0")}:${(endMinutes % 60).toString().padStart(2, "0")}`;
+
+    const barberName = barbers?.find((b) => b.id === values.barberId)?.name ?? "El barbero";
+    const daySchedule = getEffectiveDaySchedule(barberSchedules, values.barberId, selectedWeekday, generalHours);
+    if (!daySchedule.isWorking) {
+      throw new Error(`${barberName} no labora este día.`);
+    }
+    if (values.time < daySchedule.start || endTime > daySchedule.end) {
+      throw new Error(`${barberName} trabaja de ${daySchedule.start} a ${daySchedule.end} este día.`);
+    }
 
     await createAppointment.mutateAsync({
       customer_id: customerId,
@@ -380,17 +428,58 @@ export default function CalendarPage() {
                 </div>
 
                 {/* Staff Columns */}
-                {displayBarbers.map((barber, barberIndex) => (
-                  <div
-                    key={barber.id}
-                    className={cn(
-                      "relative border-r border-border last:border-r-0",
-                      barberIndex % 2 === 1 && "bg-secondary/10"
-                    )}
-                  >
-                    {hours.map((hour) => (
-                      <div key={hour} className="h-20 border-b border-border border-dashed" />
-                    ))}
+                {displayBarbers.map((barber, barberIndex) => {
+                  const daySchedule = barberDaySchedule.get(barber.id);
+                  const gridTotalPx = (endHour - startHour) * HOUR_PX;
+                  const minutesFromGridStart = (time: string) => {
+                    const [h, m] = time.split(":").map(Number);
+                    return (h - startHour) * 60 + m;
+                  };
+                  const topOverlayPx = daySchedule?.isWorking
+                    ? Math.max(0, minutesFromGridStart(daySchedule.start) * (HOUR_PX / 60))
+                    : 0;
+                  const bottomOverlayTopPx = daySchedule?.isWorking
+                    ? Math.max(0, minutesFromGridStart(daySchedule.end) * (HOUR_PX / 60))
+                    : 0;
+
+                  return (
+                    <div
+                      key={barber.id}
+                      className={cn(
+                        "relative border-r border-border last:border-r-0",
+                        barberIndex % 2 === 1 && "bg-secondary/10"
+                      )}
+                    >
+                      {hours.map((hour) => (
+                        <div key={hour} className="h-20 border-b border-border border-dashed" />
+                      ))}
+
+                      {daySchedule && !daySchedule.isWorking ? (
+                        <div
+                          className="absolute inset-0 bg-muted/60 flex items-start justify-center pt-6 pointer-events-none z-10"
+                        >
+                          <span className="text-xs text-muted-foreground font-medium bg-card px-2 py-1 rounded-md border">
+                            No labora este día
+                          </span>
+                        </div>
+                      ) : (
+                        daySchedule && (
+                          <>
+                            {topOverlayPx > 0 && (
+                              <div
+                                className="absolute left-0 right-0 top-0 bg-muted/50 pointer-events-none z-10"
+                                style={{ height: `${topOverlayPx}px` }}
+                              />
+                            )}
+                            {bottomOverlayTopPx < gridTotalPx && (
+                              <div
+                                className="absolute left-0 right-0 bg-muted/50 pointer-events-none z-10"
+                                style={{ top: `${bottomOverlayTopPx}px`, height: `${gridTotalPx - bottomOverlayTopPx}px` }}
+                              />
+                            )}
+                          </>
+                        )
+                      )}
 
                     {/* Appointments */}
                     {getBarberAppointments(barber.id).map((apt) => {
@@ -436,8 +525,9 @@ export default function CalendarPage() {
                         </div>
                       );
                     })}
-                  </div>
-                ))}
+                    </div>
+                  );
+                })}
               </div>
             </ScrollArea>
           </div>
@@ -616,7 +706,7 @@ export default function CalendarPage() {
         onOpenChange={setIsDialogOpen}
         customers={customers ?? []}
         services={services ?? []}
-        barbers={barbers ?? []}
+        barbers={workingBarbers}
         onSubmit={handleCreateAppointment}
       />
 

@@ -11,6 +11,7 @@ import {
   Loader2,
   Scissors,
   Power,
+  Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -36,6 +37,7 @@ import { DateRangeFilterBar } from "@/components/shared/DateRangeFilterBar";
 import { EntityCard } from "@/components/shared/EntityCard";
 import { EntityFormDialog } from "@/components/shared/EntityFormDialog";
 import { CreateTeamAccessDialog } from "@/components/settings/CreateTeamAccessDialog";
+import { BarberScheduleDialog } from "@/components/staff/BarberScheduleDialog";
 import type { DateFilterOption } from "@/hooks/useDateRangeFilter";
 import { toast } from "sonner";
 
@@ -86,6 +88,7 @@ export default function StaffPage() {
   const toggleActive = useToggleBarberActive();
 
   const [accessBarber, setAccessBarber] = useState<{ id: string; name: string; email: string } | null>(null);
+  const [scheduleBarber, setScheduleBarber] = useState<{ id: string; name: string } | null>(null);
 
   const statsByBarber = useMemo(() => {
     const map: Record<string, { sales: number; completed: number; total: number }> = {};
@@ -250,17 +253,28 @@ export default function StaffPage() {
                     </div>
                   )}
 
-                  {!member.user_id && member.email && (
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {!member.user_id && member.email && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1"
+                        onClick={() => setAccessBarber({ id: member.id, name: member.name, email: member.email! })}
+                      >
+                        <UserPlus className="w-3.5 h-3.5" />
+                        Crear acceso
+                      </Button>
+                    )}
                     <Button
                       size="sm"
                       variant="outline"
-                      className="mt-3 gap-1"
-                      onClick={() => setAccessBarber({ id: member.id, name: member.name, email: member.email! })}
+                      className="gap-1"
+                      onClick={() => setScheduleBarber({ id: member.id, name: member.name })}
                     >
-                      <UserPlus className="w-3.5 h-3.5" />
-                      Crear acceso
+                      <Clock className="w-3.5 h-3.5" />
+                      Horario
                     </Button>
-                  )}
+                  </div>
 
                   <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-border">
                     <div>
@@ -402,6 +416,15 @@ export default function StaffPage() {
         fixedRole="barber"
         onSuccess={() => setAccessBarber(null)}
       />
+
+      {scheduleBarber && (
+        <BarberScheduleDialog
+          open={!!scheduleBarber}
+          onOpenChange={(open) => !open && setScheduleBarber(null)}
+          barberId={scheduleBarber.id}
+          barberName={scheduleBarber.name}
+        />
+      )}
     </DashboardLayout>
   );
 }
