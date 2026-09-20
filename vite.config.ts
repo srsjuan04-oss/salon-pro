@@ -21,5 +21,15 @@ export default defineConfig(({ mode }) => ({
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
     css: true,
+    // Con el pool de forks paralelo por defecto, algunos runners (Bun en
+    // particular) matan los workers antes de que el reporter alcance a
+    // volcar la salida de todos los archivos de test. Un solo fork evita
+    // la condición de carrera a costa de un poco de paralelismo.
+    pool: "forks",
+    poolOptions: {
+      forks: {
+        singleFork: true,
+      },
+    },
   },
 }));
