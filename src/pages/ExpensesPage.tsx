@@ -15,15 +15,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -32,32 +25,23 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { 
-  Plus, 
-  Download, 
-  Receipt, 
-  TrendingDown, 
-  Wallet, 
+  Plus,
+  Receipt,
+  TrendingDown,
+  Wallet,
   Lock,
   Repeat,
-  Calendar,
-  CalendarDays,
-  CalendarRange,
-  ChevronLeft,
-  ChevronRight
 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
-import { format, subDays, isWithinInterval, parseISO, startOfDay, endOfDay } from "date-fns";
-import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { useCreateExpense, useExpenses, type Expense } from "@/hooks/useExpenses";
-import { reportError } from "@/lib/errors";
+import { expenseSchema } from "@/lib/schemas/expense";
+import { useDateRangeFilter } from "@/hooks/useDateRangeFilter";
+import { usePagination } from "@/hooks/usePagination";
+import { DateRangeFilterBar } from "@/components/shared/DateRangeFilterBar";
+import { PaginationControls } from "@/components/shared/PaginationControls";
+import { EntityFormDialog } from "@/components/shared/EntityFormDialog";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -89,7 +73,6 @@ const categoryColors: Record<string, string> = {
   "Otros": "bg-muted text-muted-foreground border-border",
 };
 
-type DateFilter = "today" | "yesterday" | "15days" | "30days" | "custom";
 type ExpenseTypeFilter = "all" | "fixed" | "variable";
 
 export default function ExpensesPage() {
@@ -98,67 +81,23 @@ export default function ExpensesPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [dateFilter, setDateFilter] = useState<DateFilter>("30days");
   const [typeFilter, setTypeFilter] = useState<ExpenseTypeFilter>("all");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [customDateRange, setCustomDateRange] = useState<{
-    from: Date | undefined;
-    to: Date | undefined;
-  }>({ from: undefined, to: undefined });
-  const [formData, setFormData] = useState({
-    description: "",
-    category: "",
-    amount: "",
-    paymentMethod: "",
-    type: "variable" as "fixed" | "variable",
-  });
 
-  const today = new Date();
-
-  // Filtrar por fecha
-  const dateFilteredExpenses = useMemo(() => {
-    return expenses.filter(expense => {
-      const expenseDate = parseISO(expense.date);
-      
-      switch (dateFilter) {
-        case "today":
-          return expense.date === format(today, "yyyy-MM-dd");
-        case "yesterday":
-          return expense.date === format(subDays(today, 1), "yyyy-MM-dd");
-        case "15days":
-          return isWithinInterval(expenseDate, {
-            start: startOfDay(subDays(today, 14)),
-            end: endOfDay(today),
-          });
-        case "30days":
-          return isWithinInterval(expenseDate, {
-            start: startOfDay(subDays(today, 29)),
-            end: endOfDay(today),
-          });
-        case "custom":
-          if (customDateRange.from && customDateRange.to) {
-            return isWithinInterval(expenseDate, {
-              start: startOfDay(customDateRange.from),
-              end: endOfDay(customDateRange.to),
-            });
-          }
-          return true;
-        default:
-          return true;
-      }
-    });
-  }, [expenses, dateFilter, customDateRange]);
+  const {
+    dateFilter,
+    setDateFilter,
+    customDateRange,
+    setCustomDateRange,
+    filtered: dateFilteredExpenses,
+    label: dateRangeLabel,
+    dayCount,
+  } = useDateRangeFilter(expenses, (e) => e.date);
 
   // Filtrar por tipo
   const filteredExpenses = useMemo(() => {
     if (typeFilter === "all") return dateFilteredExpenses;
     return dateFilteredExpenses.filter(e => e.type === typeFilter);
   }, [dateFilteredExpenses, typeFilter]);
-
-  // Reset page when filters change
-  useMemo(() => {
-    setCurrentPage(1);
-  }, [dateFilter, typeFilter, customDateRange]);
 
   const fixedExpenses = dateFilteredExpenses.filter(e => e.type === "fixed");
   const variableExpenses = dateFilteredExpenses.filter(e => e.type === "variable");
@@ -167,11 +106,17 @@ export default function ExpensesPage() {
   const totalVariable = variableExpenses.reduce((acc, e) => acc + e.amount, 0);
   const totalExpenses = totalFixed + totalVariable;
 
-  // Pagination
-  const totalPages = Math.ceil(filteredExpenses.length / ITEMS_PER_PAGE);
-  const paginatedExpenses = filteredExpenses.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
+  const {
+    page: currentPage,
+    setPage: setCurrentPage,
+    totalPages,
+    pageItems: paginatedExpenses,
+    rangeStart,
+    rangeEnd,
+  } = usePagination(
+    filteredExpenses,
+    ITEMS_PER_PAGE,
+    `${dateFilter}-${typeFilter}-${customDateRange.from}-${customDateRange.to}`,
   );
 
   // Datos para el gráfico de categorías
@@ -180,7 +125,7 @@ export default function ExpensesPage() {
     filteredExpenses.forEach(e => {
       categoryTotals[e.category] = (categoryTotals[e.category] || 0) + e.amount;
     });
-    
+
     const colors = [
       "hsl(var(--primary))",
       "hsl(var(--success))",
@@ -200,55 +145,6 @@ export default function ExpensesPage() {
       }))
       .sort((a, b) => b.value - a.value);
   }, [filteredExpenses]);
-
-  const handleCategoryChange = (categoryName: string) => {
-    const category = categories.find(c => c.name === categoryName);
-    setFormData({ 
-      ...formData, 
-      category: categoryName,
-      type: category?.type || "variable"
-    });
-  };
-
-  const handleSubmit = async () => {
-    if (!formData.description || !formData.category || !formData.amount) {
-      toast.error("Completa todos los campos"); return;
-    }
-    try {
-      await createExpense.mutateAsync({
-        description: formData.description,
-        category: formData.category,
-        amount: parseFloat(formData.amount),
-        paymentMethod: formData.paymentMethod,
-        type: formData.type,
-      });
-      toast.success("Gasto registrado");
-      setFormData({ description: "", category: "", amount: "", paymentMethod: "", type: "variable" });
-      setIsDialogOpen(false);
-    } catch (error) {
-      await reportError(error);
-    }
-  };
-
-  const getDateRangeLabel = () => {
-    switch (dateFilter) {
-      case "today":
-        return format(today, "d 'de' MMMM, yyyy", { locale: es });
-      case "yesterday":
-        return format(subDays(today, 1), "d 'de' MMMM, yyyy", { locale: es });
-      case "15days":
-        return `${format(subDays(today, 14), "d MMM", { locale: es })} - ${format(today, "d MMM, yyyy", { locale: es })}`;
-      case "30days":
-        return `${format(subDays(today, 29), "d MMM", { locale: es })} - ${format(today, "d MMM, yyyy", { locale: es })}`;
-      case "custom":
-        if (customDateRange.from && customDateRange.to) {
-          return `${format(customDateRange.from, "d MMM", { locale: es })} - ${format(customDateRange.to, "d MMM, yyyy", { locale: es })}`;
-        }
-        return "Seleccionar fechas";
-      default:
-        return "";
-    }
-  };
 
   return (
     <DashboardLayout>
@@ -281,84 +177,14 @@ export default function ExpensesPage() {
           </div>
         </div>
 
-        {/* Date Filters */}
-        <div className="bg-card rounded-2xl border shadow-soft p-4">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant={dateFilter === "today" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setDateFilter("today")}
-                className={dateFilter === "today" ? "gradient-gold shadow-gold" : ""}
-              >
-                <Calendar className="w-4 h-4 mr-2" />
-                Hoy
-              </Button>
-              <Button
-                variant={dateFilter === "yesterday" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setDateFilter("yesterday")}
-                className={dateFilter === "yesterday" ? "gradient-gold shadow-gold" : ""}
-              >
-                <Calendar className="w-4 h-4 mr-2" />
-                Ayer
-              </Button>
-              <Button
-                variant={dateFilter === "15days" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setDateFilter("15days")}
-                className={dateFilter === "15days" ? "gradient-gold shadow-gold" : ""}
-              >
-                <CalendarDays className="w-4 h-4 mr-2" />
-                15 días
-              </Button>
-              <Button
-                variant={dateFilter === "30days" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setDateFilter("30days")}
-                className={dateFilter === "30days" ? "gradient-gold shadow-gold" : ""}
-              >
-                <CalendarDays className="w-4 h-4 mr-2" />
-                30 días
-              </Button>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant={dateFilter === "custom" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setDateFilter("custom")}
-                    className={dateFilter === "custom" ? "gradient-gold shadow-gold" : ""}
-                  >
-                    <CalendarRange className="w-4 h-4 mr-2" />
-                    Personalizado
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <CalendarComponent
-                    mode="range"
-                    selected={{ from: customDateRange.from, to: customDateRange.to }}
-                    onSelect={(range) => {
-                      setCustomDateRange({ from: range?.from, to: range?.to });
-                      setDateFilter("custom");
-                    }}
-                    numberOfMonths={2}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-            
-            <div className="flex items-center gap-2 text-sm">
-              <Badge variant="secondary" className="gap-1 py-1.5 px-3">
-                <CalendarDays className="w-3.5 h-3.5" />
-                {getDateRangeLabel()}
-              </Badge>
-              <Badge variant="outline" className="py-1.5 px-3">
-                {filteredExpenses.length} gastos
-              </Badge>
-            </div>
-          </div>
-        </div>
+        <DateRangeFilterBar
+          dateFilter={dateFilter}
+          onDateFilterChange={setDateFilter}
+          customDateRange={customDateRange}
+          onCustomDateRangeChange={setCustomDateRange}
+          label={dateRangeLabel}
+          countLabel={`${filteredExpenses.length} gastos`}
+        />
 
         {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -426,10 +252,7 @@ export default function ExpensesPage() {
               <div className="mt-4">
                 <p className="text-sm text-muted-foreground">Promedio Diario</p>
                 <p className="text-2xl md:text-3xl font-bold">
-                  ${dateFilter === "today" || dateFilter === "yesterday" 
-                    ? totalExpenses.toLocaleString()
-                    : Math.round(totalExpenses / (dateFilter === "15days" ? 15 : 30)).toLocaleString()
-                  }
+                  ${Math.round(totalExpenses / dayCount).toLocaleString()}
                 </p>
               </div>
             </CardContent>
@@ -633,151 +456,135 @@ export default function ExpensesPage() {
               </TableBody>
             </Table>
 
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
-                <p className="text-sm text-muted-foreground">
-                  Mostrando {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredExpenses.length)} de {filteredExpenses.length}
-                </p>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </Button>
-                  <div className="flex items-center gap-1">
-                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                      let pageNum: number;
-                      if (totalPages <= 5) {
-                        pageNum = i + 1;
-                      } else if (currentPage <= 3) {
-                        pageNum = i + 1;
-                      } else if (currentPage >= totalPages - 2) {
-                        pageNum = totalPages - 4 + i;
-                      } else {
-                        pageNum = currentPage - 2 + i;
-                      }
-                      return (
-                        <Button
-                          key={pageNum}
-                          variant={currentPage === pageNum ? "default" : "outline"}
-                          size="sm"
-                          className={cn("w-8 h-8 p-0", currentPage === pageNum && "gradient-gold shadow-gold")}
-                          onClick={() => setCurrentPage(pageNum)}
-                        >
-                          {pageNum}
-                        </Button>
-                      );
-                    })}
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                    disabled={currentPage === totalPages}
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-            )}
+            <PaginationControls
+              page={currentPage}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+              rangeStart={rangeStart}
+              rangeEnd={rangeEnd}
+              total={filteredExpenses.length}
+              itemLabel="gastos"
+            />
           </CardContent>
         </Card>
 
-        {/* Dialog for new expense */}
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent className="sm:max-w-[500px]">
-            <DialogHeader>
-              <DialogTitle>Agregar Nuevo Gasto</DialogTitle>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="description">Descripción</Label>
-                <Input
-                  id="description"
-                  placeholder="Ej: Productos capilares"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="category">Categoría</Label>
-                <Select
-                  value={formData.category}
-                  onValueChange={handleCategoryChange}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar categoría" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Gastos Fijos</div>
-                    {categories.filter(c => c.type === "fixed").map((cat) => (
-                      <SelectItem key={cat.name} value={cat.name}>
-                        <div className="flex items-center gap-2">
-                          <Lock className="w-3 h-3 text-warning" />
-                          {cat.name}
-                        </div>
-                      </SelectItem>
-                    ))}
-                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground mt-2">Gastos Variables</div>
-                    {categories.filter(c => c.type === "variable").map((cat) => (
-                      <SelectItem key={cat.name} value={cat.name}>
-                        <div className="flex items-center gap-2">
-                          <Repeat className="w-3 h-3 text-info" />
-                          {cat.name}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {formData.category && (
-                  <p className="text-xs text-muted-foreground">
-                    Tipo: {formData.type === "fixed" ? "Gasto Fijo" : "Gasto Variable"}
-                  </p>
+        <EntityFormDialog<typeof expenseSchema>
+          open={isDialogOpen}
+          onOpenChange={setIsDialogOpen}
+          title="Agregar Nuevo Gasto"
+          schema={expenseSchema}
+          defaultValues={{ description: "", category: "", amount: "" as unknown as number, paymentMethod: "", type: "variable" }}
+          onSubmit={async (values) => {
+            await createExpense.mutateAsync(values);
+            toast.success("Gasto registrado");
+          }}
+          submitLabel="Guardar Gasto"
+          className="sm:max-w-[500px]"
+        >
+          {(form) => (
+            <>
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Descripción</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ej: Productos capilares" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
                 )}
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="amount">Monto ($)</Label>
-                <Input
-                  id="amount"
-                  type="number"
-                  placeholder="0.00"
-                  value={formData.amount}
-                  onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="paymentMethod">Método de Pago</Label>
-                <Select
-                  value={formData.paymentMethod}
-                  onValueChange={(value) => setFormData({ ...formData, paymentMethod: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar método" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {paymentMethods.map((method) => (
-                      <SelectItem key={method} value={method}>
-                        {method}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                Cancelar
-              </Button>
-              <Button onClick={handleSubmit} className="gradient-gold text-primary-foreground">
-                Guardar Gasto
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+              />
+              <FormField
+                control={form.control}
+                name="category"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Categoría</FormLabel>
+                    <Select
+                      value={field.value}
+                      onValueChange={(value) => {
+                        field.onChange(value);
+                        const category = categories.find((c) => c.name === value);
+                        form.setValue("type", category?.type ?? "variable");
+                      }}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccionar categoría" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Gastos Fijos</div>
+                        {categories.filter(c => c.type === "fixed").map((cat) => (
+                          <SelectItem key={cat.name} value={cat.name}>
+                            <div className="flex items-center gap-2">
+                              <Lock className="w-3 h-3 text-warning" />
+                              {cat.name}
+                            </div>
+                          </SelectItem>
+                        ))}
+                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground mt-2">Gastos Variables</div>
+                        {categories.filter(c => c.type === "variable").map((cat) => (
+                          <SelectItem key={cat.name} value={cat.name}>
+                            <div className="flex items-center gap-2">
+                              <Repeat className="w-3 h-3 text-info" />
+                              {cat.name}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {field.value && (
+                      <p className="text-xs text-muted-foreground">
+                        Tipo: {form.watch("type") === "fixed" ? "Gasto Fijo" : "Gasto Variable"}
+                      </p>
+                    )}
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="amount"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Monto ($)</FormLabel>
+                    <FormControl>
+                      <Input type="number" placeholder="0.00" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="paymentMethod"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Método de Pago</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccionar método" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {paymentMethods.map((method) => (
+                          <SelectItem key={method} value={method}>
+                            {method}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </>
+          )}
+        </EntityFormDialog>
 
         <CsvImportDialog open={importOpen} onOpenChange={setImportOpen} type="expenses" onImported={() => refetchExpenses()} />
         <ImportHistoryDialog open={historyOpen} onOpenChange={setHistoryOpen} type="expenses" />

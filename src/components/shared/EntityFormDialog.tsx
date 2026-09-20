@@ -15,7 +15,10 @@ interface EntityFormDialogProps<TSchema extends z.ZodTypeAny> {
   description?: string;
   schema: TSchema;
   defaultValues: DefaultValues<z.infer<TSchema>>;
-  onSubmit: (values: z.infer<TSchema>) => Promise<void>;
+  // Required<...>: los campos con .default() en el schema quedan marcados
+  // opcionales por z.infer bajo Zod 3 aunque en el output nunca falten
+  // (zodResolver ya corrió antes de que handleSubmit dispare este callback).
+  onSubmit: (values: Required<z.infer<TSchema>>) => Promise<void>;
   submitLabel?: string;
   submittingLabel?: string;
   className?: string;
@@ -56,7 +59,7 @@ export function EntityFormDialog<TSchema extends z.ZodTypeAny>({
 
   const handleSubmit = form.handleSubmit(async (values) => {
     try {
-      await onSubmit(values);
+      await onSubmit(values as Required<z.infer<TSchema>>);
       onOpenChange(false);
     } catch (error) {
       await reportError(error);
