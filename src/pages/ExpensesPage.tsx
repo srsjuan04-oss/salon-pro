@@ -1,5 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useState, useMemo } from "react";
 import { CsvImportDialog } from "@/components/financial/CsvImportDialog";
 import { ImportHistoryDialog } from "@/components/financial/ImportHistoryDialog";
 import { Upload, History } from "lucide-react";
@@ -57,18 +56,10 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, 
 import { format, subDays, isWithinInterval, parseISO, startOfDay, endOfDay } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import { useCreateExpense, useExpenses, type Expense } from "@/hooks/useExpenses";
+import { reportError } from "@/lib/errors";
 
 const ITEMS_PER_PAGE = 10;
-
-interface Expense {
-  id: string;
-  description: string;
-  category: string;
-  date: string;
-  amount: number;
-  paymentMethod: string;
-  type: "fixed" | "variable";
-}
 
 const categories = [
   { name: "Alquiler", type: "fixed" as const },
@@ -84,8 +75,6 @@ const categories = [
 ];
 
 const paymentMethods = ["Efectivo", "Transferencia", "Débito", "Crédito"];
-
-const initialExpenses: Expense[] = [];
 
 const categoryColors: Record<string, string> = {
   "Alquiler": "bg-warning/10 text-warning border-warning/20",
@@ -104,7 +93,8 @@ type DateFilter = "today" | "yesterday" | "15days" | "30days" | "custom";
 type ExpenseTypeFilter = "all" | "fixed" | "variable";
 
 export default function ExpensesPage() {
-  const [expenses, setExpenses] = useState<Expense[]>(initialExpenses);
+  const { data: expenses = [], refetch: refetchExpenses } = useExpenses();
+  const createExpense = useCreateExpense();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -124,25 +114,6 @@ export default function ExpensesPage() {
   });
 
   const today = new Date();
-
-  const loadExpenses = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("expenses")
-      .select("*")
-      .order("expense_date", { ascending: false });
-    if (error) { toast.error(error.message); return; }
-    setExpenses((data ?? []).map((e: any) => ({
-      id: e.id,
-      description: e.description,
-      category: e.category,
-      date: e.expense_date,
-      amount: Number(e.amount),
-      paymentMethod: e.payment_method ?? "",
-      type: e.type,
-    })));
-  }, []);
-
-  useEffect(() => { loadExpenses(); }, [loadExpenses]);
 
   // Filtrar por fecha
   const dateFilteredExpenses = useMemo(() => {
@@ -243,22 +214,20 @@ export default function ExpensesPage() {
     if (!formData.description || !formData.category || !formData.amount) {
       toast.error("Completa todos los campos"); return;
     }
-    const { data: userData } = await supabase.auth.getUser();
-    const { error } = await supabase.from("expenses").insert({
-      description: formData.description,
-      category: formData.category,
-      expense_date: format(new Date(), "yyyy-MM-dd"),
-      amount: parseFloat(formData.amount),
-      payment_method: formData.paymentMethod || null,
-      type: formData.type,
-      source: "manual",
-      created_by: userData.user?.id,
-    } as any);
-    if (error) { toast.error(error.message); return; }
-    toast.success("Gasto registrado");
-    setFormData({ description: "", category: "", amount: "", paymentMethod: "", type: "variable" });
-    setIsDialogOpen(false);
-    loadExpenses();
+    try {
+      await createExpense.mutateAsync({
+        description: formData.description,
+        category: formData.category,
+        amount: parseFloat(formData.amount),
+        paymentMethod: formData.paymentMethod,
+        type: formData.type,
+      });
+      toast.success("Gasto registrado");
+      setFormData({ description: "", category: "", amount: "", paymentMethod: "", type: "variable" });
+      setIsDialogOpen(false);
+    } catch (error) {
+      await reportError(error);
+    }
   };
 
   const getDateRangeLabel = () => {
@@ -810,7 +779,7 @@ export default function ExpensesPage() {
           </DialogContent>
         </Dialog>
 
-        <CsvImportDialog open={importOpen} onOpenChange={setImportOpen} type="expenses" onImported={loadExpenses} />
+        <CsvImportDialog open={importOpen} onOpenChange={setImportOpen} type="expenses" onImported={() => refetchExpenses()} />
         <ImportHistoryDialog open={historyOpen} onOpenChange={setHistoryOpen} type="expenses" />
       </div>
     </DashboardLayout>

@@ -27,6 +27,7 @@ import { format, addDays, startOfWeek, isSameDay } from "date-fns";
 import { es } from "date-fns/locale";
 import {
   useAppointments,
+  useAppointmentsRealtimeSync,
   useBarbers,
   useServices,
   useCustomers,
@@ -35,11 +36,10 @@ import {
   useCreateCustomer,
   Appointment,
 } from "@/hooks/useAppointments";
-import { supabase } from "@/integrations/supabase/client";
-import { useQueryClient } from "@tanstack/react-query";
 import { useScheduleSettings } from "@/hooks/useScheduleSettings";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/hooks/useAuth";
+import { reportError } from "@/lib/errors";
 
 const HOUR_PX = 80;
 
@@ -64,7 +64,6 @@ export default function CalendarPage() {
   const [cancelPreset, setCancelPreset] = useState("");
   
   const isMobile = useIsMobile();
-  const queryClient = useQueryClient();
   const formattedDate = format(selectedDate, "yyyy-MM-dd");
   
   const { data: appointments, isLoading: loadingAppointments } = useAppointments(formattedDate);
@@ -114,23 +113,7 @@ export default function CalendarPage() {
     notes: "",
   });
 
-  // Realtime subscription
-  useEffect(() => {
-    const channel = supabase
-      .channel("appointments-realtime")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "appointments" },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ["appointments"] });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [queryClient]);
+  useAppointmentsRealtimeSync();
 
   const weekDays = useMemo(() => {
     return Array.from({ length: 7 }, (_, i) => addDays(currentWeekStart, i));
@@ -237,25 +220,21 @@ export default function CalendarPage() {
       return;
     }
     try {
-      const { error } = await supabase
-        .from("appointments")
-        .update({
-          status: "cancelled",
-          cancellation_reason:
-            cancelPreset && cancelPreset !== "Otro" && cancelReason.trim()
-              ? `${cancelPreset} — ${cancelReason.trim()}`
-              : reason,
-        } as any)
-        .eq("id", selectedAppointment.id);
-      if (error) throw error;
-      queryClient.invalidateQueries({ queryKey: ["appointments"] });
+      await updateAppointment.mutateAsync({
+        id: selectedAppointment.id,
+        status: "cancelled",
+        cancellation_reason:
+          cancelPreset && cancelPreset !== "Otro" && cancelReason.trim()
+            ? `${cancelPreset} — ${cancelReason.trim()}`
+            : reason,
+      });
       toast.success("Cita cancelada");
       setIsCancelOpen(false);
       setIsDetailOpen(false);
       setCancelReason("");
       setCancelPreset("");
-    } catch (e) {
-      toast.error("Error al cancelar la cita");
+    } catch (error) {
+      await reportError(error, "Error al cancelar la cita");
     }
   };
 

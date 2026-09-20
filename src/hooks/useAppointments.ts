@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Tables } from "@/integrations/supabase/types";
@@ -140,6 +141,7 @@ export function useUpdateAppointment() {
       start_time?: string;
       end_time?: string;
       notes?: string;
+      cancellation_reason?: string;
     }) => {
       const { data, error } = await supabase
         .from("appointments")
@@ -181,4 +183,26 @@ export function useCreateCustomer() {
       queryClient.invalidateQueries({ queryKey: ["customers"] });
     },
   });
+}
+
+/**
+ * Suscribe a cambios realtime en la tabla appointments e invalida la query
+ * de citas en cada cambio. Antes vivía inline en CalendarPage.tsx; se movió
+ * aquí para que la página no toque el cliente de Supabase directamente.
+ */
+export function useAppointmentsRealtimeSync() {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("appointments-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "appointments" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["appointments"] });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
 }

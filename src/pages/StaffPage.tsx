@@ -32,9 +32,16 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format, subDays, startOfDay } from "date-fns";
 import { es } from "date-fns/locale";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { useServices } from "@/hooks/useAppointments";
+import {
+  useAllBarbers,
+  useCreateBarber,
+  useCreateTeamAccess,
+  useStaffAppointments,
+  useToggleBarberActive,
+  useTodayStaffAppointments,
+} from "@/hooks/useStaff";
+import { reportError } from "@/lib/errors";
 import { toast } from "sonner";
 
 type TimeFilter = "today" | "yesterday" | "15days" | "30days" | "custom";
@@ -47,10 +54,7 @@ const timeFilterOptions: { value: TimeFilter; label: string }[] = [
   { value: "custom", label: "Personalizado" },
 ];
 
-const fmtDate = (d: Date) => format(d, "yyyy-MM-dd");
-
 export default function StaffPage() {
-  const queryClient = useQueryClient();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("30days");
   const [customDateRange, setCustomDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
@@ -68,17 +72,7 @@ export default function StaffPage() {
   const { data: services } = useServices();
 
   // Barbers = the same source the calendar uses
-  const { data: barbers, isLoading: loadingBarbers } = useQuery({
-    queryKey: ["barbers-all"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("barbers")
-        .select("*")
-        .order("name");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const { data: barbers, isLoading: loadingBarbers } = useAllBarbers();
 
   const range = useMemo(() => {
     const today = startOfDay(new Date());
@@ -99,82 +93,16 @@ export default function StaffPage() {
     }
   }, [timeFilter, customDateRange]);
 
-  const { data: appointments } = useQuery({
-    queryKey: ["staff-appointments", fmtDate(range.from), fmtDate(range.to)],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("appointments")
-        .select("id, barber_id, status, appointment_date, service:services(name, price)")
-        .gte("appointment_date", fmtDate(range.from))
-        .lte("appointment_date", fmtDate(range.to));
-      if (error) throw error;
-      return data as any[];
-    },
-  });
+  const { data: appointments } = useStaffAppointments(range);
+  const { data: todayAppointments } = useTodayStaffAppointments();
 
-  const { data: todayAppointments } = useQuery({
-    queryKey: ["staff-appointments-today", fmtDate(new Date())],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("appointments")
-        .select("id, barber_id, status")
-        .eq("appointment_date", fmtDate(new Date()));
-      if (error) throw error;
-      return data as any[];
-    },
-  });
-
-  const createBarber = useMutation({
-    mutationFn: async (payload: { name: string; email: string | null; phone: string | null; specialty: string | null }) => {
-      const { error } = await supabase.from("barbers").insert(payload as any);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["barbers-all"] });
-      queryClient.invalidateQueries({ queryKey: ["barbers"] });
-      toast.success("Miembro agregado");
-      setIsDialogOpen(false);
-      setFormData({ name: "", email: "", phone: "", specialty: "" });
-    },
-    onError: () => toast.error("No se pudo agregar el miembro"),
-  });
-
-  const toggleActive = useMutation({
-    mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
-      const { error } = await supabase.from("barbers").update({ is_active }).eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["barbers-all"] });
-      queryClient.invalidateQueries({ queryKey: ["barbers"] });
-    },
-    onError: () => toast.error("No se pudo actualizar el estado"),
-  });
+  const createBarber = useCreateBarber();
+  const toggleActive = useToggleBarberActive();
 
   const [accessBarber, setAccessBarber] = useState<{ id: string; name: string; email: string } | null>(null);
   const [accessPassword, setAccessPassword] = useState("");
 
-  const createAccess = useMutation({
-    mutationFn: async () => {
-      if (!accessBarber) return;
-      const { data, error } = await supabase.functions.invoke("create-team-account", {
-        body: { name: accessBarber.name, email: accessBarber.email, password: accessPassword, role: "barber" },
-      });
-      if (error) {
-        const body = await (error as any)?.context?.json?.().catch(() => null);
-        throw new Error(body?.error ?? error.message);
-      }
-      if (data?.error) throw new Error(data.error);
-      return data;
-    },
-    onSuccess: () => {
-      toast.success("Cuenta de acceso creada");
-      queryClient.invalidateQueries({ queryKey: ["barbers-all"] });
-      setAccessBarber(null);
-      setAccessPassword("");
-    },
-    onError: (e: any) => toast.error(e.message ?? "No se pudo crear la cuenta"),
-  });
+  const createAccess = useCreateTeamAccess();
 
   const statsByBarber = useMemo(() => {
     const map: Record<string, { sales: number; completed: number; total: number }> = {};
@@ -213,12 +141,22 @@ export default function StaffPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim()) return;
-    createBarber.mutate({
-      name: formData.name.trim(),
-      email: formData.email.trim() || null,
-      phone: formData.phone.trim() || null,
-      specialty: formData.specialty.trim() || null,
-    });
+    createBarber.mutate(
+      {
+        name: formData.name.trim(),
+        email: formData.email.trim() || null,
+        phone: formData.phone.trim() || null,
+        specialty: formData.specialty.trim() || null,
+      },
+      {
+        onSuccess: () => {
+          toast.success("Miembro agregado");
+          setIsDialogOpen(false);
+          setFormData({ name: "", email: "", phone: "", specialty: "" });
+        },
+        onError: (error) => reportError(error, "No se pudo agregar el miembro"),
+      },
+    );
   };
 
   return (
@@ -394,7 +332,10 @@ export default function StaffPage() {
                       size="icon"
                       title={member.is_active ? "Desactivar" : "Activar"}
                       onClick={() =>
-                        toggleActive.mutate({ id: member.id, is_active: !member.is_active })
+                        toggleActive.mutate(
+                          { id: member.id, is_active: !member.is_active },
+                          { onError: (error) => reportError(error, "No se pudo actualizar el estado") },
+                        )
                       }
                     >
                       <Power className="w-4 h-4" />
@@ -566,7 +507,20 @@ export default function StaffPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setAccessBarber(null)}>Cancelar</Button>
             <Button
-              onClick={() => createAccess.mutate()}
+              onClick={() =>
+                accessBarber &&
+                createAccess.mutate(
+                  { name: accessBarber.name, email: accessBarber.email, password: accessPassword, role: "barber" },
+                  {
+                    onSuccess: () => {
+                      toast.success("Cuenta de acceso creada");
+                      setAccessBarber(null);
+                      setAccessPassword("");
+                    },
+                    onError: (error) => reportError(error, "No se pudo crear la cuenta"),
+                  },
+                )
+              }
               disabled={accessPassword.length < 6 || createAccess.isPending}
             >
               {createAccess.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}

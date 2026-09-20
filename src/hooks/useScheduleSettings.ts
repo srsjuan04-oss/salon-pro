@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { reportError } from "@/lib/errors";
 
 export interface ScheduleSettings {
   day_start: string; // "HH:MM"
@@ -17,11 +18,18 @@ export function useScheduleSettings() {
   return useQuery({
     queryKey: ["schedule_settings"],
     queryFn: async (): Promise<ScheduleSettings> => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("schedule_settings")
         .select("day_start, day_end, slot_minutes")
         .limit(1)
         .maybeSingle();
+      if (error) {
+        // No se relanza: el calendario sigue funcionando con los horarios
+        // por defecto, pero el fallo queda visible en vez de descartarse
+        // en silencio como antes.
+        await reportError(error, "No se pudo cargar el horario configurado, usando valores por defecto");
+        return DEFAULTS;
+      }
       if (!data) return DEFAULTS;
       return {
         day_start: data.day_start.slice(0, 5),

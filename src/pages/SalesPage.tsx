@@ -1,5 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useState, useMemo } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -49,11 +48,10 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { useCreateSale, useMarkSaleAsPaid, useSales, type Sale } from "@/hooks/useSalesEntries";
+import { reportError } from "@/lib/errors";
 
 const ITEMS_PER_PAGE = 10;
-
-
-
 
 const services = [
   { name: "Corte de cabello", price: 250 },
@@ -65,54 +63,6 @@ const services = [
   { name: "Coloración", price: 600 },
   { name: "Fade", price: 200 },
 ];
-
-interface Sale {
-  id: string;
-  client: string;
-  service: string;
-  amount: number;
-  stylist: string;
-  date: string;
-  time: string;
-  method: string;
-  status: "paid" | "pending";
-}
-
-// Generamos ventas de los últimos 30 días para demostración
-const generateSalesData = (): Sale[] => {
-  const today = new Date("2026-01-15");
-  const salesData: Sale[] = [];
-  
-  const clients = ["María García", "Laura Martínez", "Sofia Hernández", "Carlos Mendez", "Elena Pérez", "Rosa Mendoza", "Juan López", "Ana Martínez", "Pedro Ruiz", "Carmen Vega"];
-  const stylists = ["Ana López", "Carmen Ruiz", "Miguel Santos", "Diego Fernández"];
-  const methods = ["Tarjeta", "Efectivo", "Transferencia"];
-  
-  let id = 1;
-  for (let daysAgo = 0; daysAgo <= 30; daysAgo++) {
-    const date = subDays(today, daysAgo);
-    const numSales = Math.floor(Math.random() * 5) + 3; // 3-7 ventas por día
-    
-    for (let i = 0; i < numSales; i++) {
-      const service = services[Math.floor(Math.random() * services.length)];
-      const isPaid = Math.random() > 0.25; // 75% pagadas
-      salesData.push({
-        id: String(id++),
-        client: clients[Math.floor(Math.random() * clients.length)],
-        service: service.name,
-        amount: service.price,
-        stylist: stylists[Math.floor(Math.random() * stylists.length)],
-        date: format(date, "yyyy-MM-dd"),
-        time: `${Math.floor(Math.random() * 10) + 8}:${Math.random() > 0.5 ? "00" : "30"}`,
-        method: isPaid ? methods[Math.floor(Math.random() * methods.length)] : "-",
-        status: isPaid ? "paid" : "pending",
-      });
-    }
-  }
-  
-  return salesData.sort((a, b) => b.date.localeCompare(a.date) || b.time.localeCompare(a.time));
-};
-
-const initialSales: Sale[] = [];
 
 const paymentMethods = ["Efectivo", "Tarjeta", "Transferencia"];
 
@@ -127,7 +77,9 @@ const dateFilterLabels: Record<DateFilter, string> = {
 };
 
 export default function SalesPage() {
-  const [sales, setSales] = useState<Sale[]>(initialSales);
+  const { data: sales = [], refetch: refetchSales } = useSales();
+  const createSale = useCreateSale();
+  const markSaleAsPaid = useMarkSaleAsPaid();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -145,48 +97,6 @@ export default function SalesPage() {
   });
 
   const today = new Date();
-
-  const loadSales = async () => {
-    const [apptRes, entryRes] = await Promise.all([
-      supabase
-        .from("appointments")
-        .select("id, appointment_date, start_time, status, customers(name), services(name, price), barbers(name)")
-        .neq("status", "cancelled")
-        .order("appointment_date", { ascending: false }),
-      supabase
-        .from("sales_entries")
-        .select("*")
-        .order("sale_date", { ascending: false }),
-    ]);
-    const fromAppts: Sale[] = (apptRes.data ?? []).map((a: any) => ({
-      id: a.id,
-      client: a.customers?.name ?? "Sin cliente",
-      service: a.services?.name ?? "Servicio",
-      amount: Number(a.services?.price) || 0,
-      stylist: a.barbers?.name ?? "—",
-      date: a.appointment_date,
-      time: (a.start_time ?? "").slice(0, 5),
-      method: a.status === "completed" ? "Efectivo" : "-",
-      status: a.status === "completed" ? "paid" : "pending",
-    }));
-    const fromEntries: Sale[] = (entryRes.data ?? []).map((e: any) => ({
-      id: `entry-${e.id}`,
-      client: e.client_name,
-      service: e.service_name,
-      amount: Number(e.amount),
-      stylist: e.stylist_name ?? "—",
-      date: e.sale_date,
-      time: e.sale_time ?? "",
-      method: e.payment_method ?? "-",
-      status: e.status === "pending" ? "pending" : "paid",
-    }));
-    const merged = [...fromAppts, ...fromEntries].sort((a, b) => b.date.localeCompare(a.date));
-    setSales(merged);
-  };
-
-  useEffect(() => { loadSales(); }, []);
-
-
 
   // Filtrar ventas por fecha
   const dateFilteredSales = useMemo(() => {
@@ -277,35 +187,26 @@ export default function SalesPage() {
     if (!formData.client || !formData.service || !formData.amount) {
       toast.error("Completa todos los campos"); return;
     }
-    const { data: userData } = await supabase.auth.getUser();
-    const { error } = await supabase.from("sales_entries").insert({
-      client_name: formData.client,
-      service_name: formData.service,
-      amount: parseFloat(formData.amount),
-      sale_date: format(new Date(), "yyyy-MM-dd"),
-      sale_time: format(new Date(), "HH:mm"),
-      payment_method: formData.paymentMethod || null,
-      status: "paid",
-      source: "manual",
-      created_by: userData.user?.id,
-    } as any);
-    if (error) { toast.error(error.message); return; }
-    toast.success("Venta registrada");
-    setIsDialogOpen(false);
-    setFormData({ client: "", service: "", amount: "", paymentMethod: "" });
-    loadSales();
+    try {
+      await createSale.mutateAsync({
+        client: formData.client,
+        service: formData.service,
+        amount: parseFloat(formData.amount),
+        paymentMethod: formData.paymentMethod,
+      });
+      toast.success("Venta registrada");
+      setIsDialogOpen(false);
+      setFormData({ client: "", service: "", amount: "", paymentMethod: "" });
+    } catch (error) {
+      await reportError(error);
+    }
   };
 
-  const markAsPaid = async (saleId: string, method: string) => {
-    if (saleId.startsWith("entry-")) {
-      const realId = saleId.replace("entry-", "");
-      await supabase.from("sales_entries").update({ status: "paid", payment_method: method }).eq("id", realId);
-    } else {
-      await supabase.from("appointments").update({ status: "completed" }).eq("id", saleId);
-    }
-    setSales(prev => prev.map(sale => 
-      sale.id === saleId ? { ...sale, status: "paid" as const, method } : sale
-    ));
+  const markAsPaid = (saleId: string, method: string) => {
+    markSaleAsPaid.mutate(
+      { saleId, method },
+      { onError: (error) => reportError(error) },
+    );
   };
 
 
@@ -362,7 +263,7 @@ export default function SalesPage() {
           </div>
         </div>
 
-        <CsvImportDialog open={importOpen} onOpenChange={setImportOpen} type="sales" onImported={loadSales} />
+        <CsvImportDialog open={importOpen} onOpenChange={setImportOpen} type="sales" onImported={() => refetchSales()} />
         <ImportHistoryDialog open={historyOpen} onOpenChange={setHistoryOpen} type="sales" />
 
         {/* Date Filters */}
