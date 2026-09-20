@@ -4,14 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Calendar } from "@/components/ui/calendar";
 import {
   UserPlus,
   DollarSign,
   TrendingUp,
   Calendar as CalendarIcon,
-  Filter,
-  Search,
   Loader2,
   Scissors,
   Power,
@@ -24,12 +21,13 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { format, subDays, startOfDay } from "date-fns";
 import { es } from "date-fns/locale";
 import { useServices } from "@/hooks/useAppointments";
@@ -42,11 +40,14 @@ import {
   useTodayStaffAppointments,
 } from "@/hooks/useStaff";
 import { reportError } from "@/lib/errors";
+import { staffMemberSchema } from "@/lib/schemas/staff";
+import { DateRangeFilterBar } from "@/components/shared/DateRangeFilterBar";
+import { EntityCard } from "@/components/shared/EntityCard";
+import { EntityFormDialog } from "@/components/shared/EntityFormDialog";
+import type { DateFilterOption } from "@/hooks/useDateRangeFilter";
 import { toast } from "sonner";
 
-type TimeFilter = "today" | "yesterday" | "15days" | "30days" | "custom";
-
-const timeFilterOptions: { value: TimeFilter; label: string }[] = [
+const timeFilterOptions: { value: DateFilterOption; label: string }[] = [
   { value: "today", label: "Hoy" },
   { value: "yesterday", label: "Ayer" },
   { value: "15days", label: "Últimos 15 días" },
@@ -56,17 +57,10 @@ const timeFilterOptions: { value: TimeFilter; label: string }[] = [
 
 export default function StaffPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [timeFilter, setTimeFilter] = useState<TimeFilter>("30days");
+  const [timeFilter, setTimeFilter] = useState<DateFilterOption>("30days");
   const [customDateRange, setCustomDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
     from: undefined,
     to: undefined,
-  });
-  const [isCustomDateOpen, setIsCustomDateOpen] = useState(false);
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    specialty: "",
   });
 
   const { data: services } = useServices();
@@ -138,27 +132,6 @@ export default function StaffPage() {
     return timeFilterOptions.find((f) => f.value === timeFilter)?.label ?? "Últimos 30 días";
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.name.trim()) return;
-    createBarber.mutate(
-      {
-        name: formData.name.trim(),
-        email: formData.email.trim() || null,
-        phone: formData.phone.trim() || null,
-        specialty: formData.specialty.trim() || null,
-      },
-      {
-        onSuccess: () => {
-          toast.success("Miembro agregado");
-          setIsDialogOpen(false);
-          setFormData({ name: "", email: "", phone: "", specialty: "" });
-        },
-        onError: (error) => reportError(error, "No se pudo agregar el miembro"),
-      },
-    );
-  };
-
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -179,66 +152,14 @@ export default function StaffPage() {
           </Button>
         </div>
 
-        {/* Time Filter */}
-        <div className="bg-card rounded-2xl border shadow-soft p-4">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-muted-foreground" />
-              <span className="text-sm font-medium">Filtrar ingresos:</span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {timeFilterOptions.map((option) =>
-                option.value !== "custom" ? (
-                  <Button
-                    key={option.value}
-                    variant={timeFilter === option.value ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setTimeFilter(option.value)}
-                    className={cn(timeFilter === option.value && "gradient-gold shadow-gold")}
-                  >
-                    {option.label}
-                  </Button>
-                ) : (
-                  <Popover key={option.value} open={isCustomDateOpen} onOpenChange={setIsCustomDateOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant={timeFilter === "custom" ? "default" : "outline"}
-                        size="sm"
-                        className={cn("gap-2", timeFilter === "custom" && "gradient-gold shadow-gold")}
-                      >
-                        <CalendarIcon className="w-4 h-4" />
-                        {timeFilter === "custom" && customDateRange.from && customDateRange.to
-                          ? `${format(customDateRange.from, "dd/MM")} - ${format(customDateRange.to, "dd/MM")}`
-                          : "Personalizado"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0 bg-popover" align="start">
-                      <div className="p-3 border-b">
-                        <p className="text-sm font-medium">Seleccionar rango de fechas</p>
-                      </div>
-                      <Calendar
-                        mode="range"
-                        selected={{ from: customDateRange.from, to: customDateRange.to }}
-                        onSelect={(r) => {
-                          setCustomDateRange({ from: r?.from, to: r?.to });
-                          if (r?.from && r?.to) {
-                            setTimeFilter("custom");
-                            setIsCustomDateOpen(false);
-                          }
-                        }}
-                        numberOfMonths={1}
-                        className="p-3 pointer-events-auto"
-                      />
-                    </PopoverContent>
-                  </Popover>
-                )
-              )}
-            </div>
-            <div className="sm:ml-auto text-sm text-muted-foreground">
-              Mostrando: <span className="font-medium text-foreground">{getFilterLabel()}</span>
-            </div>
-          </div>
-        </div>
+        <DateRangeFilterBar
+          dateFilter={timeFilter}
+          onDateFilterChange={setTimeFilter}
+          customDateRange={customDateRange}
+          onCustomDateRangeChange={setCustomDateRange}
+          label={getFilterLabel()}
+          countLabel={`${totalAppointments} citas`}
+        />
 
         {/* Summary Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -292,41 +213,28 @@ export default function StaffPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {(barbers ?? []).map((member, index) => {
+            {(barbers ?? []).map((member) => {
               const stats = statsByBarber[member.id] ?? { sales: 0, completed: 0, total: 0 };
               return (
-                <div
+                <EntityCard
                   key={member.id}
-                  className={cn(
-                    "bg-card rounded-2xl border shadow-soft p-5 md:p-6 transition-all duration-300",
-                    "hover:shadow-medium animate-slide-up",
-                    !member.is_active && "opacity-60"
-                  )}
-                  style={{ animationDelay: `${index * 50}ms` }}
-                >
-                  <div className="flex items-start justify-between mb-4 gap-3">
-                    <div className="flex items-center gap-4 min-w-0">
-                      <div className="relative shrink-0">
-                        <div className="w-14 h-14 rounded-full gradient-gold flex items-center justify-center text-primary-foreground text-xl font-semibold">
-                          {member.name.charAt(0).toUpperCase()}
-                        </div>
-                        <span
-                          className={cn(
-                            "absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-card",
-                            member.is_active ? "bg-success" : "bg-muted-foreground"
-                          )}
-                        />
+                  className={cn("md:p-6", !member.is_active && "opacity-60")}
+                  avatar={
+                    <div className="relative shrink-0">
+                      <div className="w-14 h-14 rounded-full gradient-gold flex items-center justify-center text-primary-foreground text-xl font-semibold">
+                        {member.name.charAt(0).toUpperCase()}
                       </div>
-                      <div className="min-w-0">
-                        <h3 className="text-lg font-semibold truncate">{member.name}</h3>
-                        <p className="text-sm text-muted-foreground truncate">
-                          {member.specialty || "Barbero"}
-                        </p>
-                        <Badge variant="outline" className="mt-1 text-xs">
-                          {member.is_active ? "Activo" : "Inactivo"}
-                        </Badge>
-                      </div>
+                      <span
+                        className={cn(
+                          "absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-card",
+                          member.is_active ? "bg-success" : "bg-muted-foreground"
+                        )}
+                      />
                     </div>
+                  }
+                  title={member.name}
+                  subtitle={member.specialty || "Barbero"}
+                  badge={
                     <Button
                       variant="ghost"
                       size="icon"
@@ -340,10 +248,14 @@ export default function StaffPage() {
                     >
                       <Power className="w-4 h-4" />
                     </Button>
-                  </div>
+                  }
+                >
+                  <Badge variant="outline" className="text-xs">
+                    {member.is_active ? "Activo" : "Inactivo"}
+                  </Badge>
 
                   {(member.email || member.phone) && (
-                    <div className="text-xs text-muted-foreground space-y-0.5 mb-2 truncate">
+                    <div className="text-xs text-muted-foreground space-y-0.5 mt-2 truncate">
                       {member.email && <p className="truncate">{member.email}</p>}
                       {member.phone && <p>{member.phone}</p>}
                     </div>
@@ -353,7 +265,7 @@ export default function StaffPage() {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="mb-4 gap-1"
+                      className="mt-3 gap-1"
                       onClick={() => setAccessBarber({ id: member.id, name: member.name, email: member.email! })}
                     >
                       <UserPlus className="w-3.5 h-3.5" />
@@ -361,7 +273,7 @@ export default function StaffPage() {
                     </Button>
                   )}
 
-                  <div className="grid grid-cols-3 gap-3 pt-4 border-t border-border">
+                  <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-border">
                     <div>
                       <p className="text-xs text-muted-foreground">Ventas</p>
                       <p className="text-lg font-bold">${stats.sales.toLocaleString()}</p>
@@ -375,113 +287,123 @@ export default function StaffPage() {
                       <p className="text-lg font-bold">{todayCountByBarber[member.id] ?? 0}</p>
                     </div>
                   </div>
-                </div>
+                </EntityCard>
               );
             })}
           </div>
         )}
       </div>
 
-      {/* Dialog Agregar Miembro */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>Agregar Miembro del Staff</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Nombre completo</Label>
-              <Input
-                id="name"
-                placeholder="Nombre del barbero"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                required
+      <EntityFormDialog<typeof staffMemberSchema>
+        open={isDialogOpen}
+        onOpenChange={setIsDialogOpen}
+        title="Agregar Miembro del Staff"
+        schema={staffMemberSchema}
+        defaultValues={{ name: "", email: "", phone: "", specialty: "" }}
+        onSubmit={async (values) => {
+          await createBarber.mutateAsync({
+            name: values.name,
+            email: values.email || null,
+            phone: values.phone || null,
+            specialty: values.specialty || null,
+          });
+          toast.success("Miembro agregado");
+        }}
+        submitLabel="Agregar Miembro"
+        className="sm:max-w-[500px]"
+      >
+        {(form) => (
+          <>
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Nombre completo</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Nombre del barbero" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Correo electrónico</FormLabel>
+                    <FormControl>
+                      <Input type="email" placeholder="correo@salon.com" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="phone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Teléfono</FormLabel>
+                    <FormControl>
+                      <Input type="tel" placeholder="+57 300 000 0000" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Correo electrónico</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="correo@salon.com"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="phone">Teléfono</Label>
-                <Input
-                  id="phone"
-                  type="tel"
-                  placeholder="+57 300 000 0000"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="specialty" className="flex items-center gap-2">
-                <Scissors className="w-4 h-4" />
-                Especialidad
-              </Label>
-              <div className="flex gap-2">
-                <Input
-                  id="specialty"
-                  placeholder="Ej: Corte y barba"
-                  value={formData.specialty}
-                  onChange={(e) => setFormData({ ...formData, specialty: e.target.value })}
-                />
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button type="button" variant="outline" size="icon" title="Elegir servicio">
-                      <Search className="h-4 w-4" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[260px] p-0 bg-popover" align="end">
-                    <ScrollArea className="h-[200px]">
-                      <div className="p-2 space-y-1">
-                        {(services ?? []).map((service) => (
-                          <button
-                            key={service.id}
-                            type="button"
-                            className="w-full text-left text-sm p-2 rounded-md hover:bg-secondary transition-colors"
-                            onClick={() => setFormData({ ...formData, specialty: service.name })}
-                          >
-                            {service.name}
-                          </button>
-                        ))}
-                        {(services ?? []).length === 0 && (
-                          <p className="text-xs text-muted-foreground p-2">
-                            No hay servicios configurados.
-                          </p>
-                        )}
-                      </div>
-                    </ScrollArea>
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </div>
-
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                Cancelar
-              </Button>
-              <Button
-                type="submit"
-                className="gradient-gold shadow-gold"
-                disabled={!formData.name.trim() || createBarber.isPending}
-              >
-                {createBarber.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                Agregar Miembro
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+            <FormField
+              control={form.control}
+              name="specialty"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="flex items-center gap-2">
+                    <Scissors className="w-4 h-4" />
+                    Especialidad
+                  </FormLabel>
+                  <div className="flex gap-2">
+                    <FormControl>
+                      <Input placeholder="Ej: Corte y barba" {...field} />
+                    </FormControl>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button type="button" variant="outline" size="icon" title="Elegir servicio">
+                          <Scissors className="h-4 w-4" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[260px] p-0 bg-popover" align="end">
+                        <Command>
+                          <CommandInput placeholder="Buscar servicio..." />
+                          <CommandList>
+                            <CommandEmpty>No hay servicios configurados.</CommandEmpty>
+                            <CommandGroup>
+                              {(services ?? []).map((service) => (
+                                <CommandItem
+                                  key={service.id}
+                                  value={service.name}
+                                  onSelect={() => field.onChange(service.name)}
+                                >
+                                  {service.name}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </>
+        )}
+      </EntityFormDialog>
 
       <Dialog open={!!accessBarber} onOpenChange={(open) => !open && setAccessBarber(null)}>
         <DialogContent className="sm:max-w-[400px]">
