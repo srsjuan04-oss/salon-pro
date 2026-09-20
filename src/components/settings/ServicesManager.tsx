@@ -3,12 +3,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter,
-} from "@/components/ui/dialog";
+import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { EntityFormDialog } from "@/components/shared/EntityFormDialog";
+import { ConfirmDeleteDialog } from "@/components/shared/ConfirmDeleteDialog";
+import { serviceSchema } from "@/lib/schemas/service";
 import { Plus, Pencil, Trash2, Scissors } from "lucide-react";
 import { toast } from "sonner";
 
@@ -22,29 +22,11 @@ type Service = {
   is_active: boolean;
 };
 
-type FormState = {
-  id?: string;
-  name: string;
-  description: string;
-  benefits: string;
-  duration_minutes: number;
-  price: number;
-  is_active: boolean;
-};
-
-const empty: FormState = {
-  name: "",
-  description: "",
-  benefits: "",
-  duration_minutes: 30,
-  price: 0,
-  is_active: true,
-};
-
 export function ServicesManager() {
   const qc = useQueryClient();
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState<FormState>(empty);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingService, setEditingService] = useState<Service | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Service | null>(null);
 
   const { data: services, isLoading } = useQuery({
     queryKey: ["services", "all"],
@@ -59,17 +41,17 @@ export function ServicesManager() {
   });
 
   const upsert = useMutation({
-    mutationFn: async (f: FormState) => {
+    mutationFn: async ({ id, ...values }: { id?: string } & ReturnType<typeof serviceSchema.parse>) => {
       const payload = {
-        name: f.name,
-        description: f.description || null,
-        benefits: f.benefits || null,
-        duration_minutes: Number(f.duration_minutes),
-        price: Number(f.price),
-        is_active: f.is_active,
+        name: values.name,
+        description: values.description || null,
+        benefits: values.benefits || null,
+        duration_minutes: values.duration_minutes,
+        price: values.price,
+        is_active: values.is_active,
       };
-      if (f.id) {
-        const { error } = await supabase.from("services").update(payload).eq("id", f.id);
+      if (id) {
+        const { error } = await supabase.from("services").update(payload).eq("id", id);
         if (error) throw error;
       } else {
         const { error } = await supabase.from("services").insert(payload as any);
@@ -78,11 +60,8 @@ export function ServicesManager() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["services"] });
-      setOpen(false);
-      setForm(empty);
       toast.success("Servicio guardado");
     },
-    onError: (e: any) => toast.error(e.message),
   });
 
   const remove = useMutation({
@@ -94,21 +73,15 @@ export function ServicesManager() {
       qc.invalidateQueries({ queryKey: ["services"] });
       toast.success("Servicio eliminado");
     },
-    onError: (e: any) => toast.error(e.message),
   });
 
-  const openNew = () => { setForm(empty); setOpen(true); };
+  const openNew = () => {
+    setEditingService(null);
+    setIsDialogOpen(true);
+  };
   const openEdit = (s: Service) => {
-    setForm({
-      id: s.id,
-      name: s.name,
-      description: s.description ?? "",
-      benefits: s.benefits ?? "",
-      duration_minutes: s.duration_minutes,
-      price: Number(s.price),
-      is_active: s.is_active,
-    });
-    setOpen(true);
+    setEditingService(s);
+    setIsDialogOpen(true);
   };
 
   return (
@@ -118,65 +91,123 @@ export function ServicesManager() {
           <h3 className="text-lg font-semibold">Servicios</h3>
           <p className="text-sm text-muted-foreground">Define los servicios que ofrece tu salón, su duración y precio.</p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={openNew} className="gap-2">
-              <Plus className="w-4 h-4" /> Nuevo servicio
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{form.id ? "Editar servicio" : "Nuevo servicio"}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Nombre</Label>
-                <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Corte de cabello" />
-              </div>
-              <div className="space-y-2">
-                <Label>Descripción</Label>
-                <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Detalles del servicio" />
-              </div>
-              <div className="space-y-2">
-                <Label>Beneficios</Label>
-                <Textarea
-                  value={form.benefits}
-                  onChange={(e) => setForm({ ...form, benefits: e.target.value })}
-                  placeholder="Ej: Deja el cabello hidratado, incluye masaje capilar y peinado final"
-                />
-                <p className="text-xs text-muted-foreground">
-                  El asistente de IA usa este texto para explicar el servicio al cliente.
-                </p>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Duración (minutos)</Label>
-                  <Input type="number" min={5} step={5} value={form.duration_minutes}
-                    onChange={(e) => setForm({ ...form, duration_minutes: Number(e.target.value) })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Precio</Label>
-                  <Input type="number" min={0} step="0.01" value={form.price}
-                    onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} />
-                </div>
-              </div>
-              <div className="flex items-center justify-between p-3 rounded-xl bg-secondary/50">
-                <div>
-                  <p className="font-medium">Activo</p>
-                  <p className="text-xs text-muted-foreground">Disponible para agendar</p>
-                </div>
-                <Switch checked={form.is_active} onCheckedChange={(v) => setForm({ ...form, is_active: v })} />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-              <Button onClick={() => upsert.mutate(form)} disabled={!form.name || upsert.isPending}>
-                Guardar
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <Button onClick={openNew} className="gap-2">
+          <Plus className="w-4 h-4" /> Nuevo servicio
+        </Button>
       </div>
+
+      <EntityFormDialog<typeof serviceSchema>
+        open={isDialogOpen}
+        onOpenChange={setIsDialogOpen}
+        title={editingService ? "Editar servicio" : "Nuevo servicio"}
+        schema={serviceSchema}
+        defaultValues={
+          editingService
+            ? {
+                name: editingService.name,
+                description: editingService.description ?? "",
+                benefits: editingService.benefits ?? "",
+                duration_minutes: editingService.duration_minutes as unknown as number,
+                price: Number(editingService.price) as unknown as number,
+                is_active: editingService.is_active,
+              }
+            : { name: "", description: "", benefits: "", duration_minutes: 30 as unknown as number, price: 0 as unknown as number, is_active: true }
+        }
+        onSubmit={async (values) => {
+          await upsert.mutateAsync({ id: editingService?.id, ...values });
+        }}
+        submitLabel="Guardar"
+      >
+        {(form) => (
+          <>
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Nombre</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Corte de cabello" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Descripción</FormLabel>
+                  <FormControl>
+                    <Textarea placeholder="Detalles del servicio" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="benefits"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Beneficios</FormLabel>
+                  <FormControl>
+                    <Textarea placeholder="Ej: Deja el cabello hidratado, incluye masaje capilar y peinado final" {...field} />
+                  </FormControl>
+                  <p className="text-xs text-muted-foreground">
+                    El asistente de IA usa este texto para explicar el servicio al cliente.
+                  </p>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="duration_minutes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Duración (minutos)</FormLabel>
+                    <FormControl>
+                      <Input type="number" min={5} step={5} {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="price"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Precio</FormLabel>
+                    <FormControl>
+                      <Input type="number" min={0} step="0.01" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            <FormField
+              control={form.control}
+              name="is_active"
+              render={({ field }) => (
+                <FormItem className="flex items-center justify-between p-3 rounded-xl bg-secondary/50">
+                  <div>
+                    <FormLabel>Activo</FormLabel>
+                    <p className="text-xs text-muted-foreground">Disponible para agendar</p>
+                  </div>
+                  <FormControl>
+                    <Switch checked={field.value} onCheckedChange={field.onChange} />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+          </>
+        )}
+      </EntityFormDialog>
 
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Cargando…</p>
@@ -206,9 +237,7 @@ export function ServicesManager() {
                 <Button variant="ghost" size="icon" onClick={() => openEdit(s)}>
                   <Pencil className="w-4 h-4" />
                 </Button>
-                <Button variant="ghost" size="icon" onClick={() => {
-                  if (confirm(`¿Eliminar "${s.name}"?`)) remove.mutate(s.id);
-                }}>
+                <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(s)}>
                   <Trash2 className="w-4 h-4 text-destructive" />
                 </Button>
               </div>
@@ -216,6 +245,16 @@ export function ServicesManager() {
           ))}
         </div>
       )}
+
+      <ConfirmDeleteDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title={`¿Eliminar "${deleteTarget?.name}"?`}
+        description="Esta acción no se puede deshacer."
+        onConfirm={async () => {
+          if (deleteTarget) await remove.mutateAsync(deleteTarget.id);
+        }}
+      />
     </div>
   );
 }

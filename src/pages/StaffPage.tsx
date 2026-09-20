@@ -3,7 +3,6 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   UserPlus,
   DollarSign,
@@ -14,13 +13,6 @@ import {
   Power,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import {
   Popover,
@@ -34,7 +26,6 @@ import { useServices } from "@/hooks/useAppointments";
 import {
   useAllBarbers,
   useCreateBarber,
-  useCreateTeamAccess,
   useStaffAppointments,
   useToggleBarberActive,
   useTodayStaffAppointments,
@@ -44,6 +35,7 @@ import { staffMemberSchema } from "@/lib/schemas/staff";
 import { DateRangeFilterBar } from "@/components/shared/DateRangeFilterBar";
 import { EntityCard } from "@/components/shared/EntityCard";
 import { EntityFormDialog } from "@/components/shared/EntityFormDialog";
+import { CreateTeamAccessDialog } from "@/components/settings/CreateTeamAccessDialog";
 import type { DateFilterOption } from "@/hooks/useDateRangeFilter";
 import { toast } from "sonner";
 
@@ -94,9 +86,6 @@ export default function StaffPage() {
   const toggleActive = useToggleBarberActive();
 
   const [accessBarber, setAccessBarber] = useState<{ id: string; name: string; email: string } | null>(null);
-  const [accessPassword, setAccessPassword] = useState("");
-
-  const createAccess = useCreateTeamAccess();
 
   const statsByBarber = useMemo(() => {
     const map: Record<string, { sales: number; completed: number; total: number }> = {};
@@ -405,52 +394,14 @@ export default function StaffPage() {
         )}
       </EntityFormDialog>
 
-      <Dialog open={!!accessBarber} onOpenChange={(open) => !open && setAccessBarber(null)}>
-        <DialogContent className="sm:max-w-[400px]">
-          <DialogHeader>
-            <DialogTitle>Crear acceso para {accessBarber?.name}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Se creará una cuenta de acceso con rol Barbero para <strong>{accessBarber?.email}</strong>, vinculada
-              directamente a esta ficha de Staff. Solo podrá ver su propio calendario.
-            </p>
-            <div className="space-y-2">
-              <Label htmlFor="access-password">Contraseña</Label>
-              <Input
-                id="access-password"
-                type="password"
-                placeholder="Mínimo 6 caracteres"
-                value={accessPassword}
-                onChange={(e) => setAccessPassword(e.target.value)}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAccessBarber(null)}>Cancelar</Button>
-            <Button
-              onClick={() =>
-                accessBarber &&
-                createAccess.mutate(
-                  { name: accessBarber.name, email: accessBarber.email, password: accessPassword, role: "barber" },
-                  {
-                    onSuccess: () => {
-                      toast.success("Cuenta de acceso creada");
-                      setAccessBarber(null);
-                      setAccessPassword("");
-                    },
-                    onError: (error) => reportError(error, "No se pudo crear la cuenta"),
-                  },
-                )
-              }
-              disabled={accessPassword.length < 6 || createAccess.isPending}
-            >
-              {createAccess.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Crear acceso
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <CreateTeamAccessDialog
+        open={!!accessBarber}
+        onOpenChange={(open) => !open && setAccessBarber(null)}
+        fixedName={accessBarber?.name}
+        fixedEmail={accessBarber?.email}
+        fixedRole="barber"
+        onSuccess={() => setAccessBarber(null)}
+      />
     </DashboardLayout>
   );
 }
