@@ -76,7 +76,11 @@ export function EntityFormDialog<TSchema extends z.ZodTypeAny>({
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          {/* noValidate: Zod es la única fuente de mensajes de validación.
+              Sin esto, un input type="email"/type="number" inválido dispara
+              la validación nativa del navegador ANTES del submit handler,
+              bloqueando el envío sin mostrar el FormMessage de Zod. */}
+          <form onSubmit={handleSubmit} noValidate className="space-y-4">
             {children(form)}
             <DialogFooter>
               <Button

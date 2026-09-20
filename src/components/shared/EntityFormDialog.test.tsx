@@ -44,6 +44,39 @@ function renderDialog(onSubmit: (values: z.infer<typeof schema>) => Promise<void
   );
 }
 
+const emailSchema = z.object({
+  email: z.string().trim().min(1, "El correo es requerido").email("Correo inválido"),
+});
+
+function renderEmailDialog(onSubmit: (values: z.infer<typeof emailSchema>) => Promise<void>) {
+  return render(
+    <EntityFormDialog
+      open
+      onOpenChange={() => {}}
+      title="Contacto"
+      schema={emailSchema}
+      defaultValues={{ email: "" }}
+      onSubmit={onSubmit}
+    >
+      {(form) => (
+        <FormField
+          control={form.control}
+          name="email"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Correo</FormLabel>
+              <FormControl>
+                <Input type="email" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      )}
+    </EntityFormDialog>,
+  );
+}
+
 describe("EntityFormDialog", () => {
   it("blocks submission and shows a validation message when the schema fails", async () => {
     const onSubmit = vi.fn();
@@ -76,5 +109,17 @@ describe("EntityFormDialog", () => {
     await user.click(screen.getByRole("button", { name: /guardar/i }));
 
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("No se pudo guardar"));
+  });
+
+  it("shows the Zod message for an invalid type=\"email\" field instead of silently blocking on native validation", async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    renderEmailDialog(onSubmit);
+
+    await user.type(screen.getByLabelText("Correo"), "not-an-email");
+    await user.click(screen.getByRole("button", { name: /guardar/i }));
+
+    expect(await screen.findByText("Correo inválido")).toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 });
