@@ -78,6 +78,19 @@ async function syncToGoogleCalendar(appointmentId: string, org: string) {
   }
 }
 
+// Deja una promesa corriendo después de responder al cliente de WhatsApp, en
+// vez de bloquear la respuesta esperándola (usado para Google Calendar, que
+// puede tardar 1-2s y no debe sumarse a la latencia del bot). EdgeRuntime es
+// el runtime de Supabase Edge Functions; si no está disponible (ej. Deno
+// local) cae a fire-and-forget simple.
+function background(promise: Promise<unknown>) {
+  if (typeof EdgeRuntime !== "undefined" && EdgeRuntime.waitUntil) {
+    EdgeRuntime.waitUntil(promise);
+  } else {
+    promise.catch(() => {});
+  }
+}
+
 async function resolveBarberId(value?: string): Promise<string | undefined> {
   if (!value) return undefined;
   if (UUID_RE.test(value)) return value;
@@ -186,25 +199,35 @@ mcp.tool("get_availability", {
   }),
   handler: async ({ date, barber_id, service_id, day_start, day_end, slot_minutes }) => {
     const org = requireOrg();
-    const resolvedBarber = await resolveBarberId(barber_id);
-    const resolvedService = await resolveServiceId(service_id);
-    const cfg = await loadScheduleSettings();
+    // Las tres son independientes entre sí, así que corren en paralelo en vez
+    // de una tras otra.
+    const [resolvedBarber, resolvedService, cfg] = await Promise.all([
+      resolveBarberId(barber_id),
+      resolveServiceId(service_id),
+      loadScheduleSettings(),
+    ]);
     const step = slot_minutes && slot_minutes > 0 ? slot_minutes : cfg.slot_minutes;
-    let duration = step;
-    if (resolvedService) {
-      const { data: svc } = await supabase.from("services")
-        .select("duration_minutes").eq("id", resolvedService).maybeSingle();
-      if (svc) duration = svc.duration_minutes;
-    }
+
     let bq = supabase.from("barbers").select("id, name")
       .eq("is_active", true).eq("organization_id", org);
     if (resolvedBarber) bq = bq.eq("id", resolvedBarber);
-    const { data: barbers, error: be } = await bq;
+
+    // Igual aquí: la duración del servicio, los barberos y las citas del día
+    // no dependen unas de otras.
+    const [svcResult, barbersResult, apptsResult] = await Promise.all([
+      resolvedService
+        ? supabase.from("services").select("duration_minutes").eq("id", resolvedService).maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+      bq,
+      supabase.from("appointments")
+        .select("barber_id, start_time, end_time")
+        .eq("appointment_date", date).eq("organization_id", org)
+        .neq("status", "cancelled"),
+    ]);
+    const duration = svcResult.data?.duration_minutes ?? step;
+    const { data: barbers, error: be } = barbersResult;
     if (be) throw new Error(be.message);
-    const { data: appts } = await supabase.from("appointments")
-      .select("barber_id, start_time, end_time")
-      .eq("appointment_date", date).eq("organization_id", org)
-      .neq("status", "cancelled");
+    const { data: appts } = apptsResult;
     const weekday = weekdayOf(date);
     const barberSchedules = await loadBarberSchedules((barbers ?? []).map((b: any) => b.id));
     const result = (barbers ?? []).map((b: any) => {
@@ -281,6 +304,12 @@ mcp.tool("request_product", {
   }),
   handler: async (args) => {
     const org = requireOrg();
+    // No depende de la resolución del cliente: se dispara ya y se espera más
+    // abajo, justo antes de usarse.
+    const productsPromise = supabase.from("services")
+      .select("id, name, price")
+      .eq("is_active", true).eq("item_type", "product").eq("organization_id", org);
+
     let customerId = args.customer_id;
     let customerName = args.customer_name;
     if (!customerId) {
@@ -307,9 +336,7 @@ mcp.tool("request_product", {
       customerName = cust?.name ?? "Cliente";
     }
 
-    const { data: products } = await supabase.from("services")
-      .select("id, name, price")
-      .eq("is_active", true).eq("item_type", "product").eq("organization_id", org);
+    const { data: products } = await productsPromise;
     const product = UUID_RE.test(args.product_id)
       ? (products ?? []).find((p) => p.id === args.product_id)
       : fuzzyMatch(products ?? [], args.product_id);
@@ -453,12 +480,26 @@ mcp.tool("create_appointment", {
         throw new Error("appointment_date debe tener formato YYYY-MM-DD.");
       if (args.appointment_date < todayBogota)
         throw new Error(`Fecha en el pasado (${args.appointment_date}). Hoy es ${todayBogota}; verifica el año y vuelve a enviar la fecha correcta.`);
-      const barberId = await resolveBarberId(args.barber_id);
-      const serviceId = await resolveServiceId(args.service_id);
+      // barber_id/service_id son independientes entre sí.
+      const [barberId, serviceId] = await Promise.all([
+        resolveBarberId(args.barber_id),
+        resolveServiceId(args.service_id),
+      ]);
 
-      const { data: svc, error: se } = await supabase.from("services")
-        .select("duration_minutes").eq("id", serviceId!).single();
-      if (se) throw new Error(se.message);
+      const weekday = weekdayOf(args.appointment_date);
+      // Ninguna de estas cuatro depende del resultado de otra, así que corren
+      // en paralelo en vez de 4 viajes secuenciales a la base de datos.
+      const [svcResult, cfg, barberSchedules, clashResult] = await Promise.all([
+        supabase.from("services").select("duration_minutes").eq("id", serviceId!).single(),
+        loadScheduleSettings(),
+        loadBarberSchedules([barberId!]),
+        supabase.from("appointments")
+          .select("id, start_time, end_time")
+          .eq("appointment_date", args.appointment_date).eq("barber_id", barberId)
+          .eq("organization_id", org).neq("status", "cancelled"),
+      ]);
+      if (svcResult.error) throw new Error(svcResult.error.message);
+      const svc = svcResult.data;
       const [h, m] = args.start_time.split(":").map(Number);
       const startMin = h * 60 + m;
       const endMin = startMin + svc.duration_minutes;
@@ -466,19 +507,12 @@ mcp.tool("create_appointment", {
 
       // Enforce the barber's own working hours for that weekday (falls back to
       // the salon's general schedule if the barber has no custom one set).
-      const weekday = weekdayOf(args.appointment_date);
-      const cfg = await loadScheduleSettings();
-      const [eff] = await loadBarberSchedules([barberId!]).then((rows) =>
-        [effectiveDaySchedule(rows, barberId!, weekday, { start: cfg.day_start, end: cfg.day_end })]);
+      const eff = effectiveDaySchedule(barberSchedules, barberId!, weekday, { start: cfg.day_start, end: cfg.day_end });
       if (!eff.isWorking) throw new Error(`El barbero no trabaja el ${WEEKDAY_ES[weekday]}.`);
       if (startMin < toMin(eff.start) || endMin > toMin(eff.end))
         throw new Error(`Ese horario está fuera del horario del barbero ese día (${eff.start}-${eff.end}).`);
 
-      const { data: clash } = await supabase.from("appointments")
-        .select("id, start_time, end_time")
-        .eq("appointment_date", args.appointment_date).eq("barber_id", barberId)
-        .eq("organization_id", org).neq("status", "cancelled");
-      const overlap = (clash ?? []).find((a: any) =>
+      const overlap = (clashResult.data ?? []).find((a: any) =>
         startMin < toMin(a.end_time) && endMin > toMin(a.start_time));
       if (overlap) throw new Error(`El barbero ya tiene una cita ${overlap.start_time}-${overlap.end_time}.`);
       const { data, error } = await supabase.from("appointments").insert({
@@ -488,7 +522,7 @@ mcp.tool("create_appointment", {
         organization_id: org,
       }).select().single();
       if (error) throw new Error(error.message);
-      await syncToGoogleCalendar(data.id, org);
+      background(syncToGoogleCalendar(data.id, org));
       return ok(data);
     } catch (e) {
       console.error("[create_appointment] ERROR:", (e as Error).message);
@@ -509,7 +543,9 @@ mcp.tool("reschedule_appointment", {
   }),
   handler: async (args) => {
     const org = requireOrg();
-    const barberId = await resolveBarberId(args.barber_id);
+    // No depende de nada más en esta función: se resuelve en paralelo con la
+    // búsqueda de la cita (si hace falta) en vez de bloquear primero.
+    const barberIdPromise = resolveBarberId(args.barber_id);
     let apptId = args.appointment_id;
     if (!apptId) {
       if (!args.phone || !args.original_date) throw new Error("Envía appointment_id, o phone + original_date.");
@@ -525,6 +561,7 @@ mcp.tool("reschedule_appointment", {
       if (!found) throw new Error(`No hay cita activa para ${args.phone} el ${args.original_date}`);
       apptId = found.id;
     }
+    const barberId = await barberIdPromise;
     const todayBogota2 = new Date(Date.now() - 5 * 3600 * 1000).toISOString().slice(0, 10);
     if (args.appointment_date < todayBogota2)
       throw new Error(`Nueva fecha en el pasado (${args.appointment_date}). Hoy es ${todayBogota2}; verifica el año.`);
@@ -533,19 +570,23 @@ mcp.tool("reschedule_appointment", {
 
     if (ae) throw new Error(ae.message);
     if (appt.organization_id !== org) throw new Error("Cita fuera de tu organización.");
-    const { data: svc } = await supabase.from("services")
-      .select("duration_minutes").eq("id", appt.service_id).single();
+
+    // Enforce the (possibly new) barber's own working hours for that weekday.
+    const effectiveBarberId = barberId ?? appt.barber_id;
+    const weekday = weekdayOf(args.appointment_date);
+    // Ninguna depende de otra: corren en paralelo.
+    const [svcResult, cfg, barberSchedules] = await Promise.all([
+      supabase.from("services").select("duration_minutes").eq("id", appt.service_id).single(),
+      loadScheduleSettings(),
+      loadBarberSchedules([effectiveBarberId]),
+    ]);
+    const svc = svcResult.data;
     const [h, m] = args.start_time.split(":").map(Number);
     const startMin = h * 60 + m;
     const endMin = startMin + (svc?.duration_minutes ?? 30);
     const end_time = `${String(Math.floor(endMin/60)).padStart(2,"0")}:${String(endMin%60).padStart(2,"0")}`;
 
-    // Enforce the (possibly new) barber's own working hours for that weekday.
-    const effectiveBarberId = barberId ?? appt.barber_id;
-    const weekday = weekdayOf(args.appointment_date);
-    const cfg = await loadScheduleSettings();
-    const [eff] = await loadBarberSchedules([effectiveBarberId]).then((rows) =>
-      [effectiveDaySchedule(rows, effectiveBarberId, weekday, { start: cfg.day_start, end: cfg.day_end })]);
+    const eff = effectiveDaySchedule(barberSchedules, effectiveBarberId, weekday, { start: cfg.day_start, end: cfg.day_end });
     if (!eff.isWorking) throw new Error(`El barbero no trabaja el ${WEEKDAY_ES[weekday]}.`);
     if (startMin < toMin(eff.start) || endMin > toMin(eff.end))
       throw new Error(`Ese horario está fuera del horario del barbero ese día (${eff.start}-${eff.end}).`);
@@ -558,7 +599,7 @@ mcp.tool("reschedule_appointment", {
     const { data, error } = await supabase.from("appointments").update(update).eq("id", apptId)
       .select().single();
     if (error) throw new Error(error.message);
-    await syncToGoogleCalendar(apptId, org);
+    background(syncToGoogleCalendar(apptId, org));
     return ok(data);
   },
 });
@@ -577,15 +618,15 @@ mcp.tool("cancel_appointment", {
       .eq("organization_id", org).select("*, customer_id").single();
     if (error) throw new Error(error.message);
     if (data?.customer_id) {
-      await supabase.from("customer_notes").insert({
+      background(supabase.from("customer_notes").insert({
         customer_id: data.customer_id,
         organization_id: org,
         note_type: "cancellation",
         source: "ai",
         content: `Canceló la cita del ${data.appointment_date} a las ${String(data.start_time).slice(0, 5)}. Motivo: ${reason}`,
-      });
+      }));
     }
-    await syncToGoogleCalendar(appointment_id, org);
+    background(syncToGoogleCalendar(appointment_id, org));
     return ok(data);
   },
 });
