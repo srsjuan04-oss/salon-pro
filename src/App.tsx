@@ -20,6 +20,8 @@ import WhatsAppPage from "./pages/WhatsAppPage";
 import AutomationPage from "./pages/AutomationPage";
 import SettingsPage from "./pages/SettingsPage";
 import PlatformAdminPage from "./pages/PlatformAdminPage";
+import SubscriptionsAdminPage from "./pages/SubscriptionsAdminPage";
+import PlansPage from "./pages/PlansPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -33,6 +35,7 @@ const App = () => (
         <Routes>
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/planes" element={<PlansPage />} />
 
           <Route path="/" element={<ProtectedRoute hideFromBarber><Index /></ProtectedRoute>} />
           <Route path="/calendar" element={<ProtectedRoute><CalendarPage /></ProtectedRoute>} />
@@ -47,6 +50,7 @@ const App = () => (
           <Route path="/automation" element={<ProtectedRoute hideFromBarber><AutomationPage /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute requireAdmin><SettingsPage /></ProtectedRoute>} />
           <Route path="/empresas" element={<ProtectedRoute requirePlatformAdmin><PlatformAdminPage /></ProtectedRoute>} />
+          <Route path="/suscripciones" element={<ProtectedRoute requirePlatformAdmin><SubscriptionsAdminPage /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
