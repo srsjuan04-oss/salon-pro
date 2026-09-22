@@ -1209,6 +1209,7 @@ export type Database = {
           amount_in_cents: number
           created_at: string
           id: string
+          kind: string
           raw_response: Json | null
           reference: string
           status: string
@@ -1219,6 +1220,7 @@ export type Database = {
           amount_in_cents: number
           created_at?: string
           id?: string
+          kind?: string
           raw_response?: Json | null
           reference: string
           status?: string
@@ -1229,6 +1231,7 @@ export type Database = {
           amount_in_cents?: number
           created_at?: string
           id?: string
+          kind?: string
           raw_response?: Json | null
           reference?: string
           status?: string
@@ -1252,6 +1255,7 @@ export type Database = {
           code: string
           currency: string
           features: string[]
+          implementation_fee_cents: number
           included_bookings: number | null
           name: string
           sort_order: number
@@ -1263,6 +1267,7 @@ export type Database = {
           code: string
           currency?: string
           features?: string[]
+          implementation_fee_cents?: number
           included_bookings?: number | null
           name: string
           sort_order?: number
@@ -1274,6 +1279,7 @@ export type Database = {
           code?: string
           currency?: string
           features?: string[]
+          implementation_fee_cents?: number
           included_bookings?: number | null
           name?: string
           sort_order?: number

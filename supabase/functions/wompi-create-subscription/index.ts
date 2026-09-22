@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
 
     const { data: plan, error: planError } = await admin
       .from("subscription_plans")
-      .select("code, amount_in_cents, currency")
+      .select("code, amount_in_cents, currency, implementation_fee_cents")
       .eq("code", planCode)
       .eq("active", true)
       .maybeSingle();
@@ -142,11 +142,46 @@ Deno.serve(async (req) => {
       reference,
       amount_in_cents: amountInCents,
       status: transaction.status ?? "PENDING",
+      kind: "subscription",
       raw_response: transaction,
     });
     if (payError) throw new Error(`No se pudo guardar el pago: ${payError.message}`);
 
-    return json({ reference, transaction_id: transaction.id, status: transaction.status });
+    // Cobro único de implementación (si aplica): transacción SEPARADA, misma
+    // fuente de pago. No debe sumarse al monto recurrente ni bloquear el
+    // alta de la suscripción si falla — se puede reintentar/cobrar aparte.
+    let implementationFee: { status: string; amount_in_cents: number } | null = null;
+    if (plan.implementation_fee_cents > 0) {
+      try {
+        const implReference = `impl_${orgId}_${Date.now()}`;
+        const implSignature = await sha256Hex(`${implReference}${plan.implementation_fee_cents}${currency}${WOMPI_INTEGRITY_SECRET}`);
+        const implTxBody: Record<string, unknown> = {
+          amount_in_cents: plan.implementation_fee_cents,
+          currency,
+          customer_email: customerEmail,
+          reference: implReference,
+          signature: implSignature,
+          payment_source_id: paymentSource.id,
+        };
+        if (paymentType === "CARD") implTxBody.payment_method = { installments };
+        const implTransaction = await wompiFetch("/transactions", implTxBody);
+
+        await admin.from("subscription_payments").insert({
+          subscription_id: subscription.id,
+          wompi_transaction_id: String(implTransaction.id),
+          reference: implReference,
+          amount_in_cents: plan.implementation_fee_cents,
+          status: implTransaction.status ?? "PENDING",
+          kind: "implementation_fee",
+          raw_response: implTransaction,
+        });
+        implementationFee = { status: implTransaction.status, amount_in_cents: plan.implementation_fee_cents };
+      } catch (e) {
+        console.error("[wompi-create-subscription] cobro de implementación falló:", (e as Error).message);
+      }
+    }
+
+    return json({ reference, transaction_id: transaction.id, status: transaction.status, implementation_fee: implementationFee });
   } catch (e) {
     console.error("[wompi-create-subscription] ERROR:", (e as Error).message);
     return json({ error: (e as Error).message }, 500);
