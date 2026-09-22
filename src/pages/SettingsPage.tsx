@@ -11,6 +11,7 @@ import { McpConnectionCard } from "@/components/settings/McpConnectionCard";
 import { TeamAccountsCard } from "@/components/settings/TeamAccountsCard";
 import { NotificationPreferencesCard } from "@/components/settings/NotificationPreferencesCard";
 import { GoogleCalendarCard } from "@/components/settings/GoogleCalendarCard";
+import { MySubscriptionCard } from "@/components/settings/MySubscriptionCard";
 import {
   Building2,
   Bell,
@@ -178,19 +179,9 @@ export default function SettingsPage() {
 
 
           <TabsContent value="billing" className="space-y-6">
-            <div className="bg-card rounded-2xl border shadow-soft p-6 space-y-6">
-              <h3 className="text-lg font-semibold">Plan Actual</h3>
-              
-              <div className="p-4 rounded-xl gradient-gold">
-                <div className="flex items-center justify-between text-primary-foreground">
-                  <div>
-                    <p className="text-sm opacity-80">Plan Profesional</p>
-                    <p className="text-2xl font-bold">$49/mes</p>
-                  </div>
-                  <Button variant="secondary">Cambiar Plan</Button>
-                </div>
-              </div>
+            <MySubscriptionCard />
 
+            <div className="bg-card rounded-2xl border shadow-soft p-6 space-y-6">
               <div className="space-y-2">
                 <Label>Tasa de comisión del staff (%)</Label>
                 <Input type="number" defaultValue="15" />
