@@ -229,10 +229,17 @@ mcp.tool("get_availability", {
 });
 
 mcp.tool("find_or_create_customer", {
-  description: "Busca cliente por teléfono o lo crea.",
+  description:
+    "Busca un cliente por teléfono, o lo crea si no existe. IMPORTANTE: llama esta herramienta " +
+    "apenas tengas el teléfono, ANTES de pedir nombre o correo. Si el cliente ya existe " +
+    "(is_new_customer=false), NO le vuelvas a preguntar su nombre — salúdalo por su nombre y, si " +
+    "hace falta, solo CONFIRMA sus datos (\"¿sigues siendo Juan, [correo]?\"). Solo pide el nombre " +
+    "si is_new_customer sería true o si la llamada falla pidiendo 'name' (cliente nuevo).",
   inputSchema: z.object({
-    phone: z.string(), name: z.string(),
-    email: z.string().optional(), whatsapp_id: z.string().optional(),
+    phone: z.string(),
+    name: z.string().optional(),
+    email: z.string().optional(),
+    whatsapp_id: z.string().optional(),
   }),
   handler: async ({ phone, name, email, whatsapp_id }) => {
     const org = requireOrg();
@@ -240,11 +247,12 @@ mcp.tool("find_or_create_customer", {
     const { data: matches } = await supabase.from("customers").select("*")
       .eq("organization_id", org)
       .or(`phone.ilike.%${tail}%,whatsapp_id.ilike.%${tail}%`).limit(1);
-    if (matches && matches[0]) return ok(matches[0]);
+    if (matches && matches[0]) return ok({ ...matches[0], is_new_customer: false });
+    if (!name) throw new Error("Cliente nuevo: pídele su nombre y vuelve a llamar a find_or_create_customer con 'name'.");
     const { data, error } = await supabase.from("customers")
       .insert({ phone, name, email, whatsapp_id, organization_id: org }).select().single();
     if (error) throw new Error(error.message);
-    return ok(data);
+    return ok({ ...data, is_new_customer: true });
   },
 });
 
