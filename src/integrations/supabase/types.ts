@@ -766,6 +766,7 @@ export type Database = {
       organization_subscriptions: {
         Row: {
           amount_in_cents: number
+          cancel_at_period_end: boolean
           created_at: string
           customer_email: string
           failed_attempts: number
@@ -780,6 +781,7 @@ export type Database = {
         }
         Insert: {
           amount_in_cents: number
+          cancel_at_period_end?: boolean
           created_at?: string
           customer_email: string
           failed_attempts?: number
@@ -794,6 +796,7 @@ export type Database = {
         }
         Update: {
           amount_in_cents?: number
+          cancel_at_period_end?: boolean
           created_at?: string
           customer_email?: string
           failed_attempts?: number
@@ -1633,6 +1636,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      cancel_organization_subscription: {
+        Args: { p_organization_id: string }
+        Returns: undefined
+      }
       current_org_id: { Args: never; Returns: string }
       current_role_name: {
         Args: never
@@ -1646,6 +1653,7 @@ export type Database = {
         Args: never
         Returns: {
           amount_in_cents: number
+          cancel_at_period_end: boolean
           next_charge_date: string
           plan_code: string
           plan_name: string
@@ -1674,6 +1682,7 @@ export type Database = {
         Args: never
         Returns: {
           amount_in_cents: number
+          cancel_at_period_end: boolean
           failed_attempts: number
           next_charge_date: string
           organization_id: string
@@ -1695,6 +1704,10 @@ export type Database = {
       }
       is_authenticated_staff: { Args: never; Returns: boolean }
       is_platform_admin: { Args: never; Returns: boolean }
+      reactivate_organization_subscription: {
+        Args: { p_organization_id: string }
+        Returns: undefined
+      }
       register_customer_payment: {
         Args: {
           p_amount: number

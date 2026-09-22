@@ -9,6 +9,7 @@ export function useAuth() {
   const [session, setSession] = useState<Session | null>(null);
   const [role, setRole] = useState<UserRole>(null);
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
+  const [isSubscriptionCanceled, setIsSubscriptionCanceled] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -26,6 +27,7 @@ export function useAuth() {
         } else {
           setRole(null);
           setIsPlatformAdmin(false);
+          setIsSubscriptionCanceled(false);
           setLoading(false);
         }
       }
@@ -48,9 +50,10 @@ export function useAuth() {
 
   const fetchUserRole = async (userId: string) => {
     try {
-      const [{ data, error }, { data: platformAdmin }] = await Promise.all([
+      const [{ data, error }, { data: platformAdmin }, { data: subscriptionRows }] = await Promise.all([
         supabase.from("user_roles").select("role").eq("user_id", userId).maybeSingle(),
         supabase.rpc("is_platform_admin"),
+        supabase.rpc("get_my_subscription"),
       ]);
 
       if (error) {
@@ -60,10 +63,17 @@ export function useAuth() {
         setRole(data?.role as UserRole ?? null);
       }
       setIsPlatformAdmin(Boolean(platformAdmin));
+      // Sin fila de suscripción (orgs creadas antes de este sistema, o el
+      // admin de plataforma) = acceso sin restricción. Solo bloquea cuando
+      // la organización tiene una suscripción y quedó explícitamente
+      // 'canceled' (ver wompi-charge-subscriptions).
+      const subscription = Array.isArray(subscriptionRows) ? subscriptionRows[0] : null;
+      setIsSubscriptionCanceled(!platformAdmin && subscription?.status === "canceled");
     } catch (err) {
       console.error("Error fetching role:", err);
       setRole(null);
       setIsPlatformAdmin(false);
+      setIsSubscriptionCanceled(false);
     } finally {
       setLoading(false);
     }
@@ -107,6 +117,7 @@ export function useAuth() {
     isStaff: role === "staff" || role === "admin",
     isBarber: role === "barber",
     isPlatformAdmin,
+    isSubscriptionCanceled,
     signIn,
     signUp,
     signOut,

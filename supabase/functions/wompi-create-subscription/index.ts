@@ -1,9 +1,13 @@
 // @ts-nocheck
-// Crea la primera suscripción de pago (Wompi) de una organización recién
-// registrada desde /planes. Se llama ya autenticado (justo después de
-// supabase.auth.signUp()). Nunca confía en el monto ni el organization_id
-// que mande el cliente: el precio sale de subscription_plans y el org_id del
-// JWT del caller.
+// Registra el medio de pago de una organización recién creada desde /planes
+// y arranca su prueba gratis de 15 días — NO cobra nada todavía. Se llama ya
+// autenticado (justo después de supabase.auth.signUp()). Nunca confía en el
+// monto ni el organization_id que mande el cliente: el precio sale de
+// subscription_plans y el org_id del JWT del caller.
+//
+// El primer cobro real (mensualidad + implementación juntas) lo hace
+// wompi-charge-subscriptions el día en que vence la prueba, salvo que la
+// organización haya cancelado antes.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -22,12 +26,7 @@ const WOMPI_BASE = Deno.env.get("WOMPI_ENV") === "production"
   ? "https://production.wompi.co/v1"
   : "https://sandbox.wompi.co/v1";
 const WOMPI_PRIVATE_KEY = Deno.env.get("WOMPI_PRIVATE_KEY")!;
-const WOMPI_INTEGRITY_SECRET = Deno.env.get("WOMPI_INTEGRITY_SECRET")!;
-
-async function sha256Hex(input: string): Promise<string> {
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
-  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
-}
+const TRIAL_DAYS = 15;
 
 async function wompiFetch(path: string, body: unknown) {
   const res = await fetch(`${WOMPI_BASE}${path}`, {
@@ -72,7 +71,6 @@ Deno.serve(async (req) => {
     const acceptanceToken = String(body.acceptance_token ?? "");
     const acceptPersonalAuth = String(body.accept_personal_auth ?? "");
     const customerEmail = String(body.customer_email ?? user.email ?? "");
-    const installments = Number.isFinite(body.installments) ? Number(body.installments) : 1;
 
     if (!["CARD", "NEQUI", "DAVIPLATA", "BANCOLOMBIA_TRANSFER"].includes(paymentType)) {
       return json({ error: `Medio de pago no soportado: ${paymentType}` }, 400);
@@ -85,13 +83,15 @@ Deno.serve(async (req) => {
 
     const { data: plan, error: planError } = await admin
       .from("subscription_plans")
-      .select("code, amount_in_cents, currency, implementation_fee_cents")
+      .select("code, amount_in_cents, currency")
       .eq("code", planCode)
       .eq("active", true)
       .maybeSingle();
     if (planError || !plan) return json({ error: `Plan no encontrado: ${planCode}` }, 404);
 
-    // Paso 1 (fuente de pago): usa la llave privada, por eso vive en el backend.
+    // Único paso con Wompi: crear la fuente de pago (usa la llave privada, por
+    // eso vive en el backend). Esto NO mueve dinero — solo guarda el medio de
+    // pago tokenizado para poder cobrarlo automáticamente cuando corresponda.
     const paymentSource = await wompiFetch("/payment_sources", {
       type: paymentType,
       token,
@@ -100,88 +100,27 @@ Deno.serve(async (req) => {
       accept_personal_auth: acceptPersonalAuth,
     });
 
-    const amountInCents = plan.amount_in_cents;
-    const currency = plan.currency ?? "COP";
-    const reference = `sub_${orgId}_${Date.now()}`;
-    const signature = await sha256Hex(`${reference}${amountInCents}${currency}${WOMPI_INTEGRITY_SECRET}`);
+    const trialEndsAt = new Date();
+    trialEndsAt.setDate(trialEndsAt.getDate() + TRIAL_DAYS);
+    const trialEndsAtStr = trialEndsAt.toISOString().slice(0, 10);
 
-    // Paso 2 (primer cobro): mismo endpoint que cualquier transacción, pero
-    // usando payment_source_id en vez de payment_method con datos crudos.
-    const txBody: Record<string, unknown> = {
-      amount_in_cents: amountInCents,
-      currency,
-      customer_email: customerEmail,
-      reference,
-      signature,
-      payment_source_id: paymentSource.id,
-    };
-    if (paymentType === "CARD") {
-      txBody.payment_method = { installments };
-      txBody.recurrent = true;
-    }
-    const transaction = await wompiFetch("/transactions", txBody);
-
-    const { data: subscription, error: subError } = await admin
+    const { error: subError } = await admin
       .from("organization_subscriptions")
       .upsert({
         organization_id: orgId,
         plan_code: plan.code,
-        amount_in_cents: amountInCents,
-        status: "pending_payment",
+        amount_in_cents: plan.amount_in_cents,
+        status: "trialing",
         payment_source_type: paymentType,
         wompi_payment_source_id: String(paymentSource.id),
         customer_email: customerEmail,
-      }, { onConflict: "organization_id" })
-      .select("id")
-      .single();
+        next_charge_date: trialEndsAtStr,
+        failed_attempts: 0,
+        cancel_at_period_end: false,
+      }, { onConflict: "organization_id" });
     if (subError) throw new Error(`No se pudo guardar la suscripción: ${subError.message}`);
 
-    const { error: payError } = await admin.from("subscription_payments").insert({
-      subscription_id: subscription.id,
-      wompi_transaction_id: String(transaction.id),
-      reference,
-      amount_in_cents: amountInCents,
-      status: transaction.status ?? "PENDING",
-      kind: "subscription",
-      raw_response: transaction,
-    });
-    if (payError) throw new Error(`No se pudo guardar el pago: ${payError.message}`);
-
-    // Cobro único de implementación (si aplica): transacción SEPARADA, misma
-    // fuente de pago. No debe sumarse al monto recurrente ni bloquear el
-    // alta de la suscripción si falla — se puede reintentar/cobrar aparte.
-    let implementationFee: { status: string; amount_in_cents: number } | null = null;
-    if (plan.implementation_fee_cents > 0) {
-      try {
-        const implReference = `impl_${orgId}_${Date.now()}`;
-        const implSignature = await sha256Hex(`${implReference}${plan.implementation_fee_cents}${currency}${WOMPI_INTEGRITY_SECRET}`);
-        const implTxBody: Record<string, unknown> = {
-          amount_in_cents: plan.implementation_fee_cents,
-          currency,
-          customer_email: customerEmail,
-          reference: implReference,
-          signature: implSignature,
-          payment_source_id: paymentSource.id,
-        };
-        if (paymentType === "CARD") implTxBody.payment_method = { installments };
-        const implTransaction = await wompiFetch("/transactions", implTxBody);
-
-        await admin.from("subscription_payments").insert({
-          subscription_id: subscription.id,
-          wompi_transaction_id: String(implTransaction.id),
-          reference: implReference,
-          amount_in_cents: plan.implementation_fee_cents,
-          status: implTransaction.status ?? "PENDING",
-          kind: "implementation_fee",
-          raw_response: implTransaction,
-        });
-        implementationFee = { status: implTransaction.status, amount_in_cents: plan.implementation_fee_cents };
-      } catch (e) {
-        console.error("[wompi-create-subscription] cobro de implementación falló:", (e as Error).message);
-      }
-    }
-
-    return json({ reference, transaction_id: transaction.id, status: transaction.status, implementation_fee: implementationFee });
+    return json({ status: "trialing", trial_ends_at: trialEndsAtStr });
   } catch (e) {
     console.error("[wompi-create-subscription] ERROR:", (e as Error).message);
     return json({ error: (e as Error).message }, 500);

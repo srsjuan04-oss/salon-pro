@@ -1,6 +1,7 @@
 import { ReactNode } from "react";
-import { Navigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 
 interface ProtectedRouteProps {
@@ -9,10 +10,18 @@ interface ProtectedRouteProps {
   requirePlatformAdmin?: boolean;
   /** Esta ruta no es parte de la vista restringida de un barbero (solo Calendario). */
   hideFromBarber?: boolean;
+  /** Deja pasar aunque la suscripción esté cancelada (ej. Configuración, para poder reactivarla). */
+  allowWhenCanceled?: boolean;
 }
 
-export function ProtectedRoute({ children, requireAdmin = false, requirePlatformAdmin = false, hideFromBarber = false }: ProtectedRouteProps) {
-  const { isAuthenticated, isStaff, isBarber, isAdmin, isPlatformAdmin, loading } = useAuth();
+export function ProtectedRoute({
+  children,
+  requireAdmin = false,
+  requirePlatformAdmin = false,
+  hideFromBarber = false,
+  allowWhenCanceled = false,
+}: ProtectedRouteProps) {
+  const { isAuthenticated, isStaff, isBarber, isAdmin, isPlatformAdmin, isSubscriptionCanceled, loading } = useAuth();
 
   if (loading) {
     return (
@@ -52,6 +61,22 @@ export function ProtectedRoute({ children, requireAdmin = false, requirePlatform
           <p className="text-muted-foreground">
             Esta sección requiere permisos de administrador.
           </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isSubscriptionCanceled && !allowWhenCanceled) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <div className="text-center space-y-4 max-w-sm">
+          <h1 className="text-2xl font-bold text-foreground">Suscripción cancelada</h1>
+          <p className="text-muted-foreground">
+            El acceso de tu negocio a CharlIA fue suspendido. Reactiva tu suscripción desde Configuración para volver a usar la app.
+          </p>
+          <Button asChild className="gradient-gold shadow-gold">
+            <Link to="/settings">Ir a Configuración</Link>
+          </Button>
         </div>
       </div>
     );

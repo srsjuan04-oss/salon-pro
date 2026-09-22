@@ -121,7 +121,7 @@ export default function PlansPage() {
   const [bcolError, setBcolError] = useState<string | null>(null);
   const [bcolTokenId, setBcolTokenId] = useState<string | null>(null);
 
-  const [status, setStatus] = useState<"idle" | "processing" | "confirming" | "success" | "error">("idle");
+  const [status, setStatus] = useState<"idle" | "processing" | "success" | "error">("idle");
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -137,17 +137,6 @@ export default function PlansPage() {
       return data as Plan[];
     },
   });
-
-  const pollSubscriptionStatus = async () => {
-    for (let attempt = 0; attempt < 10; attempt++) {
-      await new Promise((r) => setTimeout(r, 2000));
-      const { data } = await supabase.rpc("get_my_subscription");
-      const sub = Array.isArray(data) ? data[0] : null;
-      if (sub?.status === "active") return true;
-      if (sub?.status === "past_due") return false;
-    }
-    return null; // sigue pendiente, el webhook puede tardar un poco más
-  };
 
   const handleVerifyNequi = async () => {
     setNequiError(null);
@@ -259,6 +248,12 @@ export default function PlansPage() {
     return Boolean(bcolTokenId);
   })();
 
+  const trialEndDateLabel = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 15);
+    return d.toLocaleDateString("es-CO", { day: "numeric", month: "long" });
+  })();
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -300,11 +295,11 @@ export default function PlansPage() {
         throw new Error("Tu cuenta se creó pero necesitas confirmar tu correo antes de continuar. Revísalo e inicia sesión.");
       }
 
-      setStatusMessage("Preparando el pago...");
+      setStatusMessage("Verificando tu medio de pago...");
       const merchant = await fetch(`${WOMPI_BASE}/merchants/${WOMPI_PUBLIC_KEY}`).then((r) => r.json());
       const acceptanceToken = merchant?.data?.presigned_acceptance?.acceptance_token;
       const personalAuthToken = merchant?.data?.presigned_personal_data_auth?.acceptance_token;
-      if (!acceptanceToken || !personalAuthToken) throw new Error("No se pudo preparar el pago. Intenta de nuevo.");
+      if (!acceptanceToken || !personalAuthToken) throw new Error("No se pudo verificar el medio de pago. Intenta de nuevo.");
 
       let token: string;
       if (paymentMethod === "CARD") {
@@ -324,7 +319,10 @@ export default function PlansPage() {
         token = bcolTokenId!;
       }
 
-      setStatusMessage("Procesando el pago...");
+      setStatusMessage("Activando tu prueba gratis...");
+      // No se cobra nada aquí: solo se guarda el medio de pago tokenizado.
+      // El primer cobro real (mensualidad + implementación) ocurre al
+      // terminar los 15 días, salvo que canceles antes.
       const { data: result, error: fnError } = await supabase.functions.invoke("wompi-create-subscription", {
         body: {
           plan_code: selectedPlan.code,
@@ -333,30 +331,16 @@ export default function PlansPage() {
           acceptance_token: acceptanceToken,
           accept_personal_auth: personalAuthToken,
           customer_email: email,
-          installments: 1,
         },
       });
       if (fnError) throw new Error(fnError.message);
       if (result?.error) throw new Error(result.error);
 
-      if (result.status === "APPROVED") {
-        setStatus("success");
-        setTimeout(() => navigate("/"), 1500);
-        return;
-      }
-
-      setStatus("confirming");
-      setStatusMessage("Confirmando el pago con tu banco...");
-      const approved = await pollSubscriptionStatus();
-      if (approved === true) {
-        setStatus("success");
-        setTimeout(() => navigate("/"), 1500);
-      } else if (approved === false) {
-        throw new Error("El pago fue rechazado. Puedes iniciar sesión y volver a intentarlo con otro medio de pago.");
-      } else {
-        setStatus("success");
-        setStatusMessage("Tu pago está siendo confirmado. Ya puedes ingresar a tu cuenta; te avisaremos cuando quede activa.");
-      }
+      setStatus("success");
+      setStatusMessage(
+        `Tu prueba gratis de 15 días comenzó. Te cobraremos el ${result.trial_ends_at} a menos que canceles antes.`
+      );
+      setTimeout(() => navigate("/"), 2500);
     } catch (err) {
       setStatus("error");
       setStatusMessage(null);
@@ -389,7 +373,7 @@ export default function PlansPage() {
           </div>
           <h1 className="text-3xl md:text-4xl font-bold">Elige el plan ideal para tu negocio</h1>
           <p className="text-muted-foreground max-w-xl mx-auto">
-            Activa CharlIA en minutos: IA por WhatsApp, agenda automática y CRM en un solo lugar
+            15 días gratis, sin cobros. IA por WhatsApp, agenda automática y CRM en un solo lugar
           </p>
           <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground pt-1">
             <ShieldCheck className="w-4 h-4 text-success" />
@@ -672,24 +656,23 @@ export default function PlansPage() {
                 )}
 
                 <p className="text-xs text-muted-foreground">
-                  Al continuar autorizas el cobro mensual automático de tu suscripción. Puedes cancelar cuando quieras.
+                  No se cobra nada hoy. El {trialEndDateLabel} se cobrarán{" "}
+                  {currency.format((selectedPlan.amount_in_cents + selectedPlan.implementation_fee_cents) / 100)}{" "}
+                  ({currency.format(selectedPlan.amount_in_cents / 100)} del plan
+                  {selectedPlan.implementation_fee_cents > 0 && (
+                    <> + {currency.format(selectedPlan.implementation_fee_cents / 100)} de implementación</>
+                  )}
+                  ), a menos que canceles antes.
                 </p>
 
                 <Button
                   type="submit"
                   className="w-full gradient-gold shadow-gold"
-                  disabled={!canSubmit || status === "processing" || status === "confirming"}
+                  disabled={!canSubmit || status === "processing"}
                 >
-                  {(status === "processing" || status === "confirming") && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                  {statusMessage ??
-                    `Pagar ${currency.format((selectedPlan.amount_in_cents + selectedPlan.implementation_fee_cents) / 100)} hoy`}
+                  {status === "processing" && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  {statusMessage ?? "Empezar prueba gratis de 15 días"}
                 </Button>
-                {selectedPlan.implementation_fee_cents > 0 && !statusMessage && (
-                  <p className="text-center text-xs text-muted-foreground -mt-3">
-                    Incluye {currency.format(selectedPlan.implementation_fee_cents / 100)} de implementación (pago único) +
-                    {" "}{currency.format(selectedPlan.amount_in_cents / 100)} del primer mes
-                  </p>
-                )}
                 <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
                   <ShieldCheck className="w-3.5 h-3.5 text-success" />
                   Transacción cifrada y procesada de forma segura por Wompi

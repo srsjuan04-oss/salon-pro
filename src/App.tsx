@@ -50,7 +50,7 @@ const App = () => (
           <Route path="/expenses" element={<ProtectedRoute hideFromBarber><ExpensesPage /></ProtectedRoute>} />
           <Route path="/whatsapp" element={<ProtectedRoute hideFromBarber><WhatsAppPage /></ProtectedRoute>} />
           <Route path="/automation" element={<ProtectedRoute hideFromBarber><AutomationPage /></ProtectedRoute>} />
-          <Route path="/settings" element={<ProtectedRoute requireAdmin><SettingsPage /></ProtectedRoute>} />
+          <Route path="/settings" element={<ProtectedRoute requireAdmin allowWhenCanceled><SettingsPage /></ProtectedRoute>} />
           <Route path="/empresas" element={<ProtectedRoute requirePlatformAdmin><PlatformAdminPage /></ProtectedRoute>} />
           <Route path="/suscripciones" element={<ProtectedRoute requirePlatformAdmin><SubscriptionsAdminPage /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
