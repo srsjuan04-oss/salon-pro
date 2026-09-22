@@ -1251,24 +1251,33 @@ export type Database = {
           amount_in_cents: number
           code: string
           currency: string
+          features: string[]
+          included_bookings: number | null
           name: string
           sort_order: number
+          target_audience: string | null
         }
         Insert: {
           active?: boolean
           amount_in_cents: number
           code: string
           currency?: string
+          features?: string[]
+          included_bookings?: number | null
           name: string
           sort_order?: number
+          target_audience?: string | null
         }
         Update: {
           active?: boolean
           amount_in_cents?: number
           code?: string
           currency?: string
+          features?: string[]
+          included_bookings?: number | null
           name?: string
           sort_order?: number
+          target_audience?: string | null
         }
         Relationships: []
       }
