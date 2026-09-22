@@ -98,11 +98,14 @@ async function resolveServiceId(value?: string): Promise<string | undefined> {
 }
 
 mcp.tool("list_services", {
-  description: "Lista los servicios activos con su descripción, beneficios, duración y precio.",
+  description:
+    "Lista los servicios y productos activos, con su descripción, beneficios, precio y tipo. " +
+    "item_type=\"service\" se agenda con create_appointment (tiene duración y barbero). " +
+    "item_type=\"product\" se vende sin cita: usa request_product en su lugar.",
   inputSchema: z.object({}),
   handler: async () => {
     const { data, error } = await supabase.from("services")
-      .select("id, name, description, benefits, duration_minutes, price")
+      .select("id, name, description, benefits, item_type, duration_minutes, price")
       .eq("is_active", true).eq("organization_id", requireOrg());
     if (error) throw new Error(error.message);
     return ok(data);
@@ -240,6 +243,63 @@ mcp.tool("find_or_create_customer", {
       .insert({ phone, name, email, whatsapp_id, organization_id: org }).select().single();
     if (error) throw new Error(error.message);
     return ok(data);
+  },
+});
+
+mcp.tool("request_product", {
+  description:
+    "Registra que un cliente quiere un producto (item_type=\"product\" en list_services). " +
+    "No agenda cita ni requiere barbero/fecha/hora — solo deja el pedido anotado en el historial " +
+    "del cliente para que el negocio le dé seguimiento. Puedes pasar customer_id O " +
+    "customer_phone + customer_name.",
+  inputSchema: z.object({
+    customer_id: z.string().optional(),
+    customer_phone: z.string().optional(),
+    customer_name: z.string().optional(),
+    product_id: z.string(),
+    quantity: z.number().optional(),
+    notes: z.string().optional(),
+  }),
+  handler: async (args) => {
+    const org = requireOrg();
+    let customerId = args.customer_id;
+    if (!customerId) {
+      if (!args.customer_phone) throw new Error("Falta customer_id o customer_phone.");
+      const tail = args.customer_phone.replace(/\D/g, "").slice(-10);
+      const { data: matches } = await supabase.from("customers").select("id")
+        .eq("organization_id", org)
+        .or(`phone.ilike.%${tail}%,whatsapp_id.ilike.%${tail}%`).limit(1);
+      const existing = matches?.[0];
+      if (existing) customerId = existing.id;
+      else {
+        if (!args.customer_name) throw new Error("Cliente nuevo: se requiere customer_name.");
+        const { data: created, error: ce } = await supabase.from("customers").insert({
+          phone: args.customer_phone, name: args.customer_name, organization_id: org,
+        }).select("id").single();
+        if (ce) throw new Error(`No se pudo crear el cliente: ${ce.message}`);
+        customerId = created.id;
+      }
+    }
+
+    const { data: products } = await supabase.from("services")
+      .select("id, name, price")
+      .eq("is_active", true).eq("item_type", "product").eq("organization_id", org);
+    const product = UUID_RE.test(args.product_id)
+      ? (products ?? []).find((p) => p.id === args.product_id)
+      : fuzzyMatch(products ?? [], args.product_id);
+    if (!product) throw new Error(`Producto no encontrado: "${args.product_id}". Disponibles: ${(products ?? []).map((p) => p.name).join(", ")}`);
+
+    const quantity = args.quantity && args.quantity > 0 ? args.quantity : 1;
+    const total = Number(product.price) * quantity;
+    const { data, error } = await supabase.from("customer_notes").insert({
+      customer_id: customerId,
+      organization_id: org,
+      note_type: "product_request",
+      source: "whatsapp",
+      content: `Pidió ${quantity}x "${product.name}" ($${total.toLocaleString()} total).${args.notes ? ` Notas: ${args.notes}` : ""}`,
+    }).select().single();
+    if (error) throw new Error(error.message);
+    return ok({ ...data, product: product.name, quantity, total });
   },
 });
 

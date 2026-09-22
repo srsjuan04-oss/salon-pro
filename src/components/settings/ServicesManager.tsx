@@ -1,15 +1,17 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { EntityFormDialog } from "@/components/shared/EntityFormDialog";
 import { ConfirmDeleteDialog } from "@/components/shared/ConfirmDeleteDialog";
 import { serviceSchema } from "@/lib/schemas/service";
-import { Plus, Pencil, Trash2, Scissors } from "lucide-react";
+import { Plus, Pencil, Trash2, Scissors, Package } from "lucide-react";
 import { toast } from "sonner";
 
 type Service = {
@@ -17,6 +19,7 @@ type Service = {
   name: string;
   description: string | null;
   benefits: string | null;
+  item_type: "service" | "product";
   duration_minutes: number;
   price: number;
   is_active: boolean;
@@ -46,7 +49,8 @@ export function ServicesManager() {
         name: values.name,
         description: values.description || null,
         benefits: values.benefits || null,
-        duration_minutes: values.duration_minutes,
+        item_type: values.item_type,
+        duration_minutes: values.item_type === "product" ? 0 : values.duration_minutes,
         price: values.price,
         is_active: values.is_active,
       };
@@ -88,18 +92,20 @@ export function ServicesManager() {
     <div className="bg-card rounded-2xl border shadow-soft p-6 space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold">Servicios</h3>
-          <p className="text-sm text-muted-foreground">Define los servicios que ofrece tu salón, su duración y precio.</p>
+          <h3 className="text-lg font-semibold">Servicios y productos</h3>
+          <p className="text-sm text-muted-foreground">
+            Los servicios se agendan con duración y barbero. Los productos se venden sin cita.
+          </p>
         </div>
         <Button onClick={openNew} className="gap-2">
-          <Plus className="w-4 h-4" /> Nuevo servicio
+          <Plus className="w-4 h-4" /> Nuevo
         </Button>
       </div>
 
       <EntityFormDialog<typeof serviceSchema>
         open={isDialogOpen}
         onOpenChange={setIsDialogOpen}
-        title={editingService ? "Editar servicio" : "Nuevo servicio"}
+        title={editingService ? "Editar" : "Nuevo servicio o producto"}
         schema={serviceSchema}
         defaultValues={
           editingService
@@ -107,11 +113,20 @@ export function ServicesManager() {
                 name: editingService.name,
                 description: editingService.description ?? "",
                 benefits: editingService.benefits ?? "",
+                item_type: editingService.item_type,
                 duration_minutes: editingService.duration_minutes as unknown as number,
                 price: Number(editingService.price) as unknown as number,
                 is_active: editingService.is_active,
               }
-            : { name: "", description: "", benefits: "", duration_minutes: 30 as unknown as number, price: 0 as unknown as number, is_active: true }
+            : {
+                name: "",
+                description: "",
+                benefits: "",
+                item_type: "service",
+                duration_minutes: 30 as unknown as number,
+                price: 0 as unknown as number,
+                is_active: true,
+              }
         }
         onSubmit={async (values) => {
           await upsert.mutateAsync({ id: editingService?.id, ...values });
@@ -120,6 +135,37 @@ export function ServicesManager() {
       >
         {(form) => (
           <>
+            <FormField
+              control={form.control}
+              name="item_type"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Tipo</FormLabel>
+                  <FormControl>
+                    <ToggleGroup
+                      type="single"
+                      variant="outline"
+                      className="justify-start"
+                      value={field.value}
+                      onValueChange={(value) => value && field.onChange(value)}
+                    >
+                      <ToggleGroupItem value="service" className="gap-2 px-4">
+                        <Scissors className="w-4 h-4" /> Servicio
+                      </ToggleGroupItem>
+                      <ToggleGroupItem value="product" className="gap-2 px-4">
+                        <Package className="w-4 h-4" /> Producto
+                      </ToggleGroupItem>
+                    </ToggleGroup>
+                  </FormControl>
+                  <p className="text-xs text-muted-foreground">
+                    {field.value === "product"
+                      ? "Se vende sin agendar cita (ej: un producto para llevar)."
+                      : "Se agenda con duración y barbero."}
+                  </p>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <FormField
               control={form.control}
               name="name"
@@ -162,20 +208,22 @@ export function ServicesManager() {
                 </FormItem>
               )}
             />
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="duration_minutes"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Duración (minutos)</FormLabel>
-                    <FormControl>
-                      <Input type="number" min={5} step={5} {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            <div className={cn("grid gap-4", form.watch("item_type") === "product" ? "grid-cols-1" : "grid-cols-2")}>
+              {form.watch("item_type") !== "product" && (
+                <FormField
+                  control={form.control}
+                  name="duration_minutes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Duración (minutos)</FormLabel>
+                      <FormControl>
+                        <Input type="number" min={5} step={5} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
               <FormField
                 control={form.control}
                 name="price"
@@ -214,7 +262,7 @@ export function ServicesManager() {
       ) : !services?.length ? (
         <div className="text-center py-10 text-muted-foreground">
           <Scissors className="w-8 h-8 mx-auto mb-2 opacity-50" />
-          Aún no has creado servicios.
+          Aún no has creado servicios ni productos.
         </div>
       ) : (
         <div className="divide-y">
@@ -223,6 +271,15 @@ export function ServicesManager() {
               <div className="flex-1">
                 <div className="flex items-center gap-2">
                   <p className="font-medium">{s.name}</p>
+                  <span
+                    className={cn(
+                      "flex items-center gap-1 text-xs px-2 py-0.5 rounded",
+                      s.item_type === "product" ? "bg-primary/10 text-primary" : "bg-secondary text-secondary-foreground"
+                    )}
+                  >
+                    {s.item_type === "product" ? <Package className="w-3 h-3" /> : <Scissors className="w-3 h-3" />}
+                    {s.item_type === "product" ? "Producto" : "Servicio"}
+                  </span>
                   {!s.is_active && (
                     <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">Inactivo</span>
                   )}
@@ -230,7 +287,7 @@ export function ServicesManager() {
                 {s.description && <p className="text-sm text-muted-foreground">{s.description}</p>}
                 {s.benefits && <p className="text-xs text-primary mt-0.5">Beneficios: {s.benefits}</p>}
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {s.duration_minutes} min · ${Number(s.price).toLocaleString()}
+                  {s.item_type === "product" ? `$${Number(s.price).toLocaleString()}` : `${s.duration_minutes} min · $${Number(s.price).toLocaleString()}`}
                 </p>
               </div>
               <div className="flex gap-2">
