@@ -18,7 +18,6 @@ import {
   ShieldCheck,
   Smartphone,
   Sparkles,
-  Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { z } from "zod";
@@ -33,7 +32,7 @@ const IS_SANDBOX = WOMPI_ENV !== "production";
 const WOMPI_PUBLIC_KEY = import.meta.env.VITE_WOMPI_PUBLIC_KEY as string;
 const WOMPI_BASE = WOMPI_ENV === "production" ? "https://production.wompi.co/v1" : "https://sandbox.wompi.co/v1";
 
-type PaymentType = "CARD" | "NEQUI" | "DAVIPLATA" | "BANCOLOMBIA_TRANSFER";
+type PaymentType = "CARD" | "NEQUI" | "BANCOLOMBIA_TRANSFER";
 
 interface Plan {
   code: string;
@@ -105,18 +104,6 @@ export default function PlansPage() {
   const [nequiError, setNequiError] = useState<string | null>(null);
   const [nequiTokenId, setNequiTokenId] = useState<string | null>(null);
 
-  // DaviPlata: token -> envío de OTP -> confirmación de OTP.
-  const [davDocType, setDavDocType] = useState("CC");
-  const [davDocNumber, setDavDocNumber] = useState("");
-  const [davPhone, setDavPhone] = useState("");
-  const [davStatus, setDavStatus] = useState<AsyncMethodStatus | "otp_sent">("idle");
-  const [davError, setDavError] = useState<string | null>(null);
-  const [davOtpCode, setDavOtpCode] = useState("");
-  const [davTokenId, setDavTokenId] = useState<string | null>(null);
-  const davIdRef = useRef<string | null>(null);
-  const davValidateUrlRef = useRef<string | null>(null);
-  const davAccessTokenRef = useRef<string | null>(null);
-
   // Bancolombia: autorización en ventana emergente.
   const [bcolStatus, setBcolStatus] = useState<AsyncMethodStatus>("idle");
   const [bcolError, setBcolError] = useState<string | null>(null);
@@ -157,71 +144,6 @@ export default function PlansPage() {
     }
   };
 
-  const handleStartDaviplata = async () => {
-    setDavError(null);
-    if (!davDocNumber.trim() || !COL_PHONE_RE.test(davPhone)) {
-      setDavError("Completa el documento y un número DaviPlata válido.");
-      return;
-    }
-    setDavStatus("verifying");
-    try {
-      const created = await wompiPublicFetch("/tokens/daviplata", {
-        type_document: davDocType,
-        number_document: davDocNumber.trim(),
-        product_number: davPhone,
-      });
-      davIdRef.current = created.id;
-      davValidateUrlRef.current = created.url_services?.code_otp_validate ?? null;
-
-      const sendRes = await fetch(created.url_services.code_otp_send, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${created.url_services.token}` },
-      });
-      const sendJson = await sendRes.json().catch(() => ({}));
-      if (!sendRes.ok) throw new Error(sendJson?.message ?? "No se pudo enviar el código OTP.");
-      davAccessTokenRef.current = sendJson?.authorization?.access_token ?? null;
-      setDavStatus("otp_sent");
-    } catch (err) {
-      setDavStatus("error");
-      setDavError((err as Error).message);
-    }
-  };
-
-  const handleConfirmDaviplataOtp = async () => {
-    setDavError(null);
-    if (!davOtpCode.trim()) {
-      setDavError("Ingresa el código que recibiste por SMS.");
-      return;
-    }
-    if (!davValidateUrlRef.current || !davAccessTokenRef.current) {
-      setDavError("La sesión expiró, vuelve a solicitar el código.");
-      setDavStatus("error");
-      return;
-    }
-    try {
-      const res = await fetch(davValidateUrlRef.current, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${davAccessTokenRef.current}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ code: davOtpCode.trim() }),
-      });
-      const json = await res.json().catch(() => ({}));
-      // El access_token es de un solo uso: cada respuesta trae el siguiente.
-      davAccessTokenRef.current = json?.authorization?.access_token ?? davAccessTokenRef.current;
-      const subStatus = json?.data?.subscription?.status;
-      if (subStatus === "APPROVED") {
-        setDavTokenId(davIdRef.current);
-        setDavStatus("approved");
-      } else if (subStatus === "DECLINED") {
-        setDavStatus("error");
-        setDavError("DaviPlata rechazó la suscripción. Intenta el proceso de nuevo.");
-      } else {
-        setDavError("Código incorrecto. Verifica e inténtalo otra vez.");
-      }
-    } catch (err) {
-      setDavError((err as Error).message);
-    }
-  };
-
   const handleAuthorizeBancolombia = async () => {
     setBcolError(null);
     setBcolStatus("verifying");
@@ -245,7 +167,6 @@ export default function PlansPage() {
     if (!selectedPlan || !salonName || !adminName || !email || !password) return false;
     if (paymentMethod === "CARD") return Boolean(cardNumber && cardCvc && cardExpMonth && cardExpYear && cardHolder);
     if (paymentMethod === "NEQUI") return Boolean(nequiTokenId);
-    if (paymentMethod === "DAVIPLATA") return Boolean(davTokenId);
     return Boolean(bcolTokenId);
   })();
 
@@ -272,7 +193,6 @@ export default function PlansPage() {
       return setError("Completa los datos de la tarjeta.");
     }
     if (paymentMethod === "NEQUI" && !nequiTokenId) return setError("Verifica tu Nequi antes de continuar.");
-    if (paymentMethod === "DAVIPLATA" && !davTokenId) return setError("Verifica tu DaviPlata antes de continuar.");
     if (paymentMethod === "BANCOLOMBIA_TRANSFER" && !bcolTokenId) return setError("Autoriza tu cuenta Bancolombia antes de continuar.");
 
     setStatus("processing");
@@ -314,8 +234,6 @@ export default function PlansPage() {
         token = cardToken.id;
       } else if (paymentMethod === "NEQUI") {
         token = nequiTokenId!;
-      } else if (paymentMethod === "DAVIPLATA") {
-        token = davTokenId!;
       } else {
         token = bcolTokenId!;
       }
@@ -494,15 +412,12 @@ export default function PlansPage() {
 
                 <div className="border-t pt-4 space-y-4">
                   <Tabs value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as PaymentType)}>
-                    <TabsList className="grid grid-cols-4 w-full">
+                    <TabsList className="grid grid-cols-3 w-full">
                       <TabsTrigger value="CARD" className="gap-1.5">
                         <CreditCard className="w-4 h-4" /> <span className="hidden sm:inline">Tarjeta</span>
                       </TabsTrigger>
                       <TabsTrigger value="NEQUI" className="gap-1.5">
                         <Smartphone className="w-4 h-4" /> <span className="hidden sm:inline">Nequi</span>
-                      </TabsTrigger>
-                      <TabsTrigger value="DAVIPLATA" className="gap-1.5">
-                        <Wallet className="w-4 h-4" /> <span className="hidden sm:inline">DaviPlata</span>
                       </TabsTrigger>
                       <TabsTrigger value="BANCOLOMBIA_TRANSFER" className="gap-1.5">
                         <Landmark className="w-4 h-4" /> <span className="hidden sm:inline">Bancolombia</span>
@@ -567,74 +482,6 @@ export default function PlansPage() {
                       {nequiError && <p className="text-sm text-destructive">{nequiError}</p>}
                       {IS_SANDBOX && (
                         <p className="text-xs text-muted-foreground">Prueba: 3991111111 (aprobada) o 3992222222 (rechazada).</p>
-                      )}
-                    </TabsContent>
-
-                    <TabsContent value="DAVIPLATA" className="space-y-3 pt-4">
-                      <div className="grid sm:grid-cols-3 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="dav-doc-type">Tipo de documento</Label>
-                          <select
-                            id="dav-doc-type"
-                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                            value={davDocType}
-                            onChange={(e) => setDavDocType(e.target.value)}
-                            disabled={davStatus === "verifying" || davStatus === "otp_sent" || davStatus === "approved"}
-                          >
-                            <option value="CC">CC</option>
-                            <option value="CE">CE</option>
-                            <option value="NIT">NIT</option>
-                            <option value="PP">Pasaporte</option>
-                          </select>
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="dav-doc-number">Número de documento</Label>
-                          <Input
-                            id="dav-doc-number"
-                            value={davDocNumber}
-                            onChange={(e) => setDavDocNumber(e.target.value)}
-                            disabled={davStatus === "verifying" || davStatus === "otp_sent" || davStatus === "approved"}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="dav-phone">Número DaviPlata</Label>
-                          <Input
-                            id="dav-phone"
-                            inputMode="numeric"
-                            maxLength={10}
-                            placeholder="3001234567"
-                            value={davPhone}
-                            onChange={(e) => setDavPhone(e.target.value)}
-                            disabled={davStatus === "verifying" || davStatus === "otp_sent" || davStatus === "approved"}
-                          />
-                        </div>
-                      </div>
-
-                      {davStatus !== "otp_sent" && davStatus !== "approved" && (
-                        <Button type="button" variant="outline" onClick={handleStartDaviplata} disabled={davStatus === "verifying"}>
-                          {davStatus === "verifying" && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                          Enviar código de verificación
-                        </Button>
-                      )}
-
-                      {davStatus === "otp_sent" && (
-                        <div className="flex gap-2 items-end">
-                          <div className="space-y-2 flex-1">
-                            <Label htmlFor="dav-otp">Código recibido por SMS</Label>
-                            <Input id="dav-otp" inputMode="numeric" maxLength={6} value={davOtpCode} onChange={(e) => setDavOtpCode(e.target.value)} />
-                          </div>
-                          <Button type="button" variant="outline" onClick={handleConfirmDaviplataOtp}>Confirmar código</Button>
-                        </div>
-                      )}
-
-                      {davStatus === "approved" && (
-                        <p className="text-sm text-success flex items-center gap-1"><CheckCircle2 className="w-4 h-4" /> DaviPlata verificado</p>
-                      )}
-                      {davError && <p className="text-sm text-destructive">{davError}</p>}
-                      {IS_SANDBOX && (
-                        <p className="text-xs text-muted-foreground">
-                          Prueba: número 3991111111, código OTP 574829 (aprobado) o 932016 (declinado).
-                        </p>
                       )}
                     </TabsContent>
 
