@@ -5,6 +5,26 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Pushes an appointment change to the org's connected Google Calendar, same as the
+// admin panel does after create/edit/cancel. Never throws: a broken/disconnected
+// Google integration must never break the WhatsApp booking flow.
+async function syncToGoogleCalendar(
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  appointmentId: string,
+  organizationId: string,
+) {
+  try {
+    await fetch(`${supabaseUrl}/functions/v1/sync-appointment-to-google`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${serviceRoleKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ appointment_id: appointmentId, organization_id: organizationId }),
+    });
+  } catch (e) {
+    console.warn("[syncToGoogleCalendar] failed:", (e as Error).message);
+  }
+}
+
 // Precio de claude-haiku-4-5 (el modelo que usa este asistente): $1.00 / $5.00 por millón de tokens.
 const HAIKU_INPUT_PRICE_PER_MTOK = 1.0;
 const HAIKU_OUTPUT_PRICE_PER_MTOK = 5.0;
@@ -403,6 +423,7 @@ ${conversation_context ? `CONTEXTO DE LA CONVERSACIÓN:\n${conversation_context}
                 action = { type: "booking_created", appointment };
                 const formattedDate = new Date(date + "T12:00:00").toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" });
                 cleanResponse = `✅ ¡Cita agendada con éxito!\n\n📅 ${formattedDate} a las ${time}\n💈 ${service.name} con ${barber.name}\n💵 $${service.price} ${currency}\n\n¡Te esperamos! 🙌`;
+                if (organizationId) await syncToGoogleCalendar(supabaseUrl, supabaseKey, appointment.id, organizationId);
               }
             }
           }
@@ -441,6 +462,7 @@ ${conversation_context ? `CONTEXTO DE LA CONVERSACIÓN:\n${conversation_context}
             source: "whatsapp",
             content: `Canceló la cita del ${date}. Motivo: ${reason}`,
           });
+          await syncToGoogleCalendar(supabaseUrl, supabaseKey, cancelled.id, customer.organization_id);
           cleanResponse = `✅ Tu cita del ${date} ha sido cancelada. Si deseas reagendar, estoy aquí para ayudarte. 📅`;
         } else {
           cleanResponse = `No encontré una cita activa para esa fecha. ¿Podrías verificar la fecha?`;
@@ -534,6 +556,7 @@ ${conversation_context ? `CONTEXTO DE LA CONVERSACIÓN:\n${conversation_context}
               };
               const formattedNewDate = new Date(newDate + "T12:00:00").toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" });
               cleanResponse = `🔄 ¡Cita reagendada con éxito!\n\n📅 Nueva fecha: ${formattedNewDate} a las ${newTime}\n💈 Con ${targetBarberName}\n\n¡Te esperamos! 🙌`;
+              await syncToGoogleCalendar(supabaseUrl, supabaseKey, updatedAppointment.id, customer.organization_id);
             }
           }
         } else {

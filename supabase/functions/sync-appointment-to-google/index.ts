@@ -40,28 +40,42 @@ Deno.serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const callerClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
-      auth: { persistSession: false },
-    });
-    const { data: { user }, error: userError } = await callerClient.auth.getUser();
-    if (userError || !user) {
-      return new Response(JSON.stringify({ error: "Sesión inválida" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
-    const supabase = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-
-    const { data: role } = await supabase
-      .from("user_roles").select("organization_id").eq("user_id", user.id).maybeSingle();
-    if (!role?.organization_id) {
-      return new Response(JSON.stringify({ error: "Sin organización" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-    const organizationId = role.organization_id as string;
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     const body = await req.json().catch(() => ({}));
     const appointmentId = body.appointment_id as string;
     if (!appointmentId) {
       return new Response(JSON.stringify({ error: "Falta appointment_id" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    const presentedToken = authHeader.replace(/^Bearer\s+/i, "");
+    let organizationId: string;
+
+    if (presentedToken === serviceRoleKey) {
+      // Trusted server-to-server call (e.g. the WhatsApp/MCP bot). There's no
+      // end-user session to resolve an organization from, so the caller must
+      // supply it directly — safe because only code holding the service role
+      // key can reach this branch.
+      if (!body.organization_id) {
+        return new Response(JSON.stringify({ error: "Falta organization_id" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      organizationId = body.organization_id as string;
+    } else {
+      const callerClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: authHeader } },
+        auth: { persistSession: false },
+      });
+      const { data: { user }, error: userError } = await callerClient.auth.getUser();
+      if (userError || !user) {
+        return new Response(JSON.stringify({ error: "Sesión inválida" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      const { data: role } = await supabase
+        .from("user_roles").select("organization_id").eq("user_id", user.id).maybeSingle();
+      if (!role?.organization_id) {
+        return new Response(JSON.stringify({ error: "Sin organización" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      organizationId = role.organization_id as string;
     }
 
     const { data: integration } = await supabase
@@ -78,7 +92,7 @@ Deno.serve(async (req) => {
 
     const { data: appt, error: apptError } = await supabase
       .from("appointments")
-      .select("*, customer:customers(name, phone), barber:barbers(name), service:services(name, duration_minutes)")
+      .select("*, customer:customers(name, phone, email), barber:barbers(name), service:services(name, duration_minutes)")
       .eq("id", appointmentId)
       .eq("organization_id", organizationId)
       .maybeSingle();
@@ -114,7 +128,7 @@ Deno.serve(async (req) => {
     // Cancelled appointment with a synced event: remove it from Google instead of updating it.
     if (appt.status === "cancelled") {
       if (appt.google_event_id) {
-        const del = await fetch(`${eventsUrl}/${appt.google_event_id}`, { method: "DELETE", headers: gcalHeaders });
+        const del = await fetch(`${eventsUrl}/${appt.google_event_id}?sendUpdates=all`, { method: "DELETE", headers: gcalHeaders });
         if (del.ok || del.status === 404 || del.status === 410) {
           await supabase.from("appointments").update({ google_event_id: null }).eq("id", appointmentId);
         }
@@ -132,26 +146,34 @@ Deno.serve(async (req) => {
       "Sincronizado desde CharlIA CRM.",
     ].filter(Boolean);
 
+    // Invite the customer as an attendee so the appointment also lands on their own
+    // Google Calendar (Google emails them the invite). Skip silently if there's no
+    // email on file or it doesn't look valid, rather than failing the whole sync.
+    const customerEmail = appt.customer?.email?.trim();
+    const isValidEmail = !!customerEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail);
+    const attendees = isValidEmail ? [{ email: customerEmail }] : undefined;
+
     const eventBody = {
       summary: `${serviceName} - ${customerName}`,
       description: notesLines.join("\n"),
       start: { dateTime: `${appt.appointment_date}T${appt.start_time}`, timeZone },
       end: { dateTime: `${appt.appointment_date}T${appt.end_time}`, timeZone },
+      ...(attendees ? { attendees } : {}),
     };
 
     let gcalRes: Response;
     if (appt.google_event_id) {
-      gcalRes = await fetch(`${eventsUrl}/${appt.google_event_id}`, {
+      gcalRes = await fetch(`${eventsUrl}/${appt.google_event_id}?sendUpdates=${attendees ? "all" : "none"}`, {
         method: "PATCH",
         headers: gcalHeaders,
         body: JSON.stringify(eventBody),
       });
       if (gcalRes.status === 404 || gcalRes.status === 410) {
         // The event was deleted on Google's side; recreate it.
-        gcalRes = await fetch(eventsUrl, { method: "POST", headers: gcalHeaders, body: JSON.stringify(eventBody) });
+        gcalRes = await fetch(`${eventsUrl}?sendUpdates=${attendees ? "all" : "none"}`, { method: "POST", headers: gcalHeaders, body: JSON.stringify(eventBody) });
       }
     } else {
-      gcalRes = await fetch(eventsUrl, { method: "POST", headers: gcalHeaders, body: JSON.stringify(eventBody) });
+      gcalRes = await fetch(`${eventsUrl}?sendUpdates=${attendees ? "all" : "none"}`, { method: "POST", headers: gcalHeaders, body: JSON.stringify(eventBody) });
     }
 
     const gcalJson = await gcalRes.json().catch(() => ({}));

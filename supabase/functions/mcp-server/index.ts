@@ -63,6 +63,21 @@ function fuzzyMatch<T extends { id: string; name: string }>(items: T[], value: s
   return best?.item;
 }
 
+// Pushes an appointment change to the org's connected Google Calendar, same as the
+// admin panel does after create/edit/cancel. Never throws: a broken/disconnected
+// Google integration must never break the WhatsApp booking flow.
+async function syncToGoogleCalendar(appointmentId: string, org: string) {
+  try {
+    await fetch(`${SUPABASE_URL}/functions/v1/sync-appointment-to-google`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ appointment_id: appointmentId, organization_id: org }),
+    });
+  } catch (e) {
+    console.warn("[syncToGoogleCalendar] failed:", (e as Error).message);
+  }
+}
+
 async function resolveBarberId(value?: string): Promise<string | undefined> {
   if (!value) return undefined;
   if (UUID_RE.test(value)) return value;
@@ -109,6 +124,13 @@ mcp.tool("list_barbers", {
 const DEFAULT_DAY_START = "10:00";
 const DEFAULT_DAY_END   = "20:00";
 const DEFAULT_SLOT_MIN  = 40;
+const WEEKDAY_ES = ["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
+
+const toMin = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+const fmt = (m: number) => `${String(Math.floor(m/60)).padStart(2,"0")}:${String(m%60).padStart(2,"0")}`;
+// Same weekday convention as barber_schedules.day_of_week (0=domingo…6=sábado).
+// Computed in UTC from a date-only string so it never shifts with server timezone.
+const weekdayOf = (dateStr: string) => new Date(`${dateStr}T00:00:00Z`).getUTCDay();
 
 async function loadScheduleSettings() {
   const { data } = await supabase.from("schedule_settings")
@@ -119,6 +141,32 @@ async function loadScheduleSettings() {
     day_end:   (data?.day_end   ?? DEFAULT_DAY_END).slice(0, 5),
     slot_minutes: data?.slot_minutes ?? DEFAULT_SLOT_MIN,
   };
+}
+
+// A barber with no barber_schedules rows at all (or none for this specific
+// weekday) uses the salon's general schedule that day — mirrors
+// src/hooks/useBarberSchedules.ts#getEffectiveDaySchedule exactly, so the
+// WhatsApp bot enforces the same per-barber hours as the admin calendar.
+type BarberScheduleRow = { barber_id: string; day_of_week: number; is_available: boolean; start_time: string; end_time: string };
+function effectiveDaySchedule(
+  schedules: BarberScheduleRow[],
+  barberId: string,
+  weekday: number,
+  fallback: { start: string; end: string },
+): { isWorking: boolean; start: string; end: string } {
+  const rows = schedules.filter((s) => s.barber_id === barberId);
+  if (rows.length === 0) return { isWorking: true, start: fallback.start, end: fallback.end };
+  const day = rows.find((s) => s.day_of_week === weekday);
+  if (!day) return { isWorking: true, start: fallback.start, end: fallback.end };
+  return { isWorking: day.is_available, start: day.start_time.slice(0, 5), end: day.end_time.slice(0, 5) };
+}
+
+async function loadBarberSchedules(barberIds: string[]): Promise<BarberScheduleRow[]> {
+  if (barberIds.length === 0) return [];
+  const { data } = await supabase.from("barber_schedules")
+    .select("barber_id, day_of_week, is_available, start_time, end_time")
+    .in("barber_id", barberIds);
+  return data ?? [];
 }
 
 mcp.tool("get_availability", {
@@ -152,11 +200,16 @@ mcp.tool("get_availability", {
       .select("barber_id, start_time, end_time")
       .eq("appointment_date", date).eq("organization_id", org)
       .neq("status", "cancelled");
-    const toMin = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
-    const fmt = (m: number) => `${String(Math.floor(m/60)).padStart(2,"0")}:${String(m%60).padStart(2,"0")}`;
-    const dayStart = toMin(day_start ?? cfg.day_start);
-    const dayEnd   = toMin(day_end   ?? cfg.day_end);
+    const weekday = weekdayOf(date);
+    const barberSchedules = await loadBarberSchedules((barbers ?? []).map((b: any) => b.id));
     const result = (barbers ?? []).map((b: any) => {
+      const eff = effectiveDaySchedule(barberSchedules, b.id, weekday, { start: cfg.day_start, end: cfg.day_end });
+      if (!eff.isWorking) {
+        return { barber_id: b.id, barber_name: b.name, slot_minutes: step, slot_duration: duration,
+          window: null, available_slots: [], note: `No trabaja el ${WEEKDAY_ES[weekday]}.` };
+      }
+      const dayStart = toMin(day_start ?? eff.start);
+      const dayEnd   = toMin(day_end   ?? eff.end);
       const busy = (appts ?? []).filter((a: any) => a.barber_id === b.id)
         .map((a: any) => [toMin(a.start_time), toMin(a.end_time)]);
       const slots: string[] = [];
@@ -241,11 +294,21 @@ mcp.tool("create_appointment", {
       const startMin = h * 60 + m;
       const endMin = startMin + svc.duration_minutes;
       const end_time = `${String(Math.floor(endMin/60)).padStart(2,"0")}:${String(endMin%60).padStart(2,"0")}`;
+
+      // Enforce the barber's own working hours for that weekday (falls back to
+      // the salon's general schedule if the barber has no custom one set).
+      const weekday = weekdayOf(args.appointment_date);
+      const cfg = await loadScheduleSettings();
+      const [eff] = await loadBarberSchedules([barberId!]).then((rows) =>
+        [effectiveDaySchedule(rows, barberId!, weekday, { start: cfg.day_start, end: cfg.day_end })]);
+      if (!eff.isWorking) throw new Error(`El barbero no trabaja el ${WEEKDAY_ES[weekday]}.`);
+      if (startMin < toMin(eff.start) || endMin > toMin(eff.end))
+        throw new Error(`Ese horario está fuera del horario del barbero ese día (${eff.start}-${eff.end}).`);
+
       const { data: clash } = await supabase.from("appointments")
         .select("id, start_time, end_time")
         .eq("appointment_date", args.appointment_date).eq("barber_id", barberId)
         .eq("organization_id", org).neq("status", "cancelled");
-      const toMin = (t: string) => { const [hh, mm] = t.split(":").map(Number); return hh*60+mm; };
       const overlap = (clash ?? []).find((a: any) =>
         startMin < toMin(a.end_time) && endMin > toMin(a.start_time));
       if (overlap) throw new Error(`El barbero ya tiene una cita ${overlap.start_time}-${overlap.end_time}.`);
@@ -256,6 +319,7 @@ mcp.tool("create_appointment", {
         organization_id: org,
       }).select().single();
       if (error) throw new Error(error.message);
+      await syncToGoogleCalendar(data.id, org);
       return ok(data);
     } catch (e) {
       console.error("[create_appointment] ERROR:", (e as Error).message);
@@ -296,15 +360,27 @@ mcp.tool("reschedule_appointment", {
     if (args.appointment_date < todayBogota2)
       throw new Error(`Nueva fecha en el pasado (${args.appointment_date}). Hoy es ${todayBogota2}; verifica el año.`);
     const { data: appt, error: ae } = await supabase.from("appointments")
-      .select("service_id, organization_id").eq("id", apptId).single();
+      .select("service_id, organization_id, barber_id").eq("id", apptId).single();
 
     if (ae) throw new Error(ae.message);
     if (appt.organization_id !== org) throw new Error("Cita fuera de tu organización.");
     const { data: svc } = await supabase.from("services")
       .select("duration_minutes").eq("id", appt.service_id).single();
     const [h, m] = args.start_time.split(":").map(Number);
-    const endMin = h*60 + m + (svc?.duration_minutes ?? 30);
+    const startMin = h * 60 + m;
+    const endMin = startMin + (svc?.duration_minutes ?? 30);
     const end_time = `${String(Math.floor(endMin/60)).padStart(2,"0")}:${String(endMin%60).padStart(2,"0")}`;
+
+    // Enforce the (possibly new) barber's own working hours for that weekday.
+    const effectiveBarberId = barberId ?? appt.barber_id;
+    const weekday = weekdayOf(args.appointment_date);
+    const cfg = await loadScheduleSettings();
+    const [eff] = await loadBarberSchedules([effectiveBarberId]).then((rows) =>
+      [effectiveDaySchedule(rows, effectiveBarberId, weekday, { start: cfg.day_start, end: cfg.day_end })]);
+    if (!eff.isWorking) throw new Error(`El barbero no trabaja el ${WEEKDAY_ES[weekday]}.`);
+    if (startMin < toMin(eff.start) || endMin > toMin(eff.end))
+      throw new Error(`Ese horario está fuera del horario del barbero ese día (${eff.start}-${eff.end}).`);
+
     const update: any = {
       appointment_date: args.appointment_date, start_time: args.start_time,
       end_time, status: "confirmed",
@@ -313,6 +389,7 @@ mcp.tool("reschedule_appointment", {
     const { data, error } = await supabase.from("appointments").update(update).eq("id", apptId)
       .select().single();
     if (error) throw new Error(error.message);
+    await syncToGoogleCalendar(apptId, org);
     return ok(data);
   },
 });
@@ -339,6 +416,7 @@ mcp.tool("cancel_appointment", {
         content: `Canceló la cita del ${data.appointment_date} a las ${String(data.start_time).slice(0, 5)}. Motivo: ${reason}`,
       });
     }
+    await syncToGoogleCalendar(appointment_id, org);
     return ok(data);
   },
 });
