@@ -110,7 +110,13 @@ export default function PlansPage() {
         password,
         options: { data: { name: adminName, salon_name: salonName } },
       });
-      if (signUpError) throw new Error(signUpError.message);
+      if (signUpError) {
+        throw new Error(
+          signUpError.message.includes("already registered")
+            ? "Este correo ya está registrado. Inicia sesión en vez de crear una cuenta nueva."
+            : signUpError.message
+        );
+      }
       if (!signUpData.session) {
         throw new Error("Tu cuenta se creó pero necesitas confirmar tu correo antes de continuar. Revísalo e inicia sesión.");
       }
@@ -164,6 +170,7 @@ export default function PlansPage() {
       }
     } catch (err) {
       setStatus("error");
+      setStatusMessage(null);
       setError((err as Error).message);
     }
   };
