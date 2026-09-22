@@ -930,6 +930,8 @@ export type Database = {
           created_at: string
           created_by: string | null
           customer_id: string | null
+          delivery_address: string | null
+          estimated_delivery: string | null
           fulfillment_status: string | null
           id: string
           import_id: string | null
@@ -948,6 +950,8 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           customer_id?: string | null
+          delivery_address?: string | null
+          estimated_delivery?: string | null
           fulfillment_status?: string | null
           id?: string
           import_id?: string | null
@@ -966,6 +970,8 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           customer_id?: string | null
+          delivery_address?: string | null
+          estimated_delivery?: string | null
           fulfillment_status?: string | null
           id?: string
           import_id?: string | null

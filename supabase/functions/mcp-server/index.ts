@@ -259,8 +259,9 @@ mcp.tool("request_product", {
     "Registra el pedido de un producto (item_type=\"product\" en list_services) como una venta " +
     "pendiente en Ventas, con estado de entrega inicial \"en preparación\" — así el negocio le da " +
     "seguimiento y tú puedes informarle el estado si el cliente vuelve a preguntar (usa " +
-    "get_product_orders). No agenda cita ni requiere barbero/fecha/hora. Puedes pasar customer_id O " +
-    "customer_phone + customer_name.",
+    "get_product_orders). No agenda cita ni requiere barbero/fecha/hora. IMPORTANTE: antes de llamar " +
+    "esta herramienta debes preguntarle al cliente la dirección completa de envío (delivery_address es " +
+    "obligatorio). Puedes pasar customer_id O customer_phone + customer_name.",
   inputSchema: z.object({
     customer_id: z.string().optional(),
     customer_phone: z.string().optional(),
@@ -268,6 +269,7 @@ mcp.tool("request_product", {
     product_id: z.string(),
     quantity: z.number().optional(),
     notes: z.string().optional(),
+    delivery_address: z.string(),
   }),
   handler: async (args) => {
     const org = requireOrg();
@@ -319,6 +321,7 @@ mcp.tool("request_product", {
       source: "whatsapp",
       customer_id: customerId,
       organization_id: org,
+      delivery_address: args.delivery_address,
     }).select().single();
     if (error) throw new Error(error.message);
     return ok({
@@ -334,7 +337,8 @@ mcp.tool("request_product", {
 mcp.tool("get_product_orders", {
   description:
     "Lista los pedidos de producto de un cliente (más recientes primero) con su estado de entrega: " +
-    "\"en preparación\", \"en reparto\" o \"entregado\". Úsalo cuando el cliente pregunte por un " +
+    "\"en preparación\", \"en reparto\" o \"entregado\", además de la dirección de envío y el tiempo " +
+    "estimado de entrega (si el negocio ya lo definió). Úsalo cuando el cliente pregunte por un " +
     "pedido que hizo antes.",
   inputSchema: z.object({
     customer_id: z.string().optional(),
@@ -353,7 +357,7 @@ mcp.tool("get_product_orders", {
     }
     if (!cid) return ok([]);
     const { data, error } = await supabase.from("sales_entries")
-      .select("id, service_name, amount, sale_date, sale_time, status, fulfillment_status")
+      .select("id, service_name, amount, sale_date, sale_time, status, fulfillment_status, delivery_address, estimated_delivery")
       .eq("customer_id", cid).eq("organization_id", org)
       .not("fulfillment_status", "is", null)
       .order("created_at", { ascending: false }).limit(limit ?? 5);

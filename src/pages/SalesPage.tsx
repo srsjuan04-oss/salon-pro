@@ -21,6 +21,7 @@ import {
   Package,
   Truck,
   PackageCheck,
+  MapPin,
 } from "lucide-react";
 import { CsvImportDialog } from "@/components/financial/CsvImportDialog";
 import { ImportHistoryDialog } from "@/components/financial/ImportHistoryDialog";
@@ -83,6 +84,10 @@ interface Sale {
   status: "paid" | "pending";
   /** Solo presente en pedidos de producto hechos por el bot (request_product). */
   fulfillmentStatus: FulfillmentStatus | null;
+  /** Dirección de envío del pedido (solo pedidos de producto). */
+  deliveryAddress: string | null;
+  /** Tiempo estimado de entrega, editable por el negocio (ej: "30-45 min"). */
+  estimatedDelivery: string | null;
 }
 
 // Generamos ventas de los últimos 30 días para demostración
@@ -113,6 +118,8 @@ const generateSalesData = (): Sale[] => {
         method: isPaid ? methods[Math.floor(Math.random() * methods.length)] : "-",
         status: isPaid ? "paid" : "pending",
         fulfillmentStatus: null,
+        deliveryAddress: null,
+        estimatedDelivery: null,
       });
     }
   }
@@ -177,6 +184,8 @@ export default function SalesPage() {
       method: a.status === "completed" ? "Efectivo" : "-",
       status: a.status === "completed" ? "paid" : "pending",
       fulfillmentStatus: null,
+      deliveryAddress: null,
+      estimatedDelivery: null,
     }));
     const fromEntries: Sale[] = (entryRes.data ?? []).map((e: any) => ({
       id: `entry-${e.id}`,
@@ -189,6 +198,8 @@ export default function SalesPage() {
       method: e.payment_method ?? "-",
       status: e.status === "pending" ? "pending" : "paid",
       fulfillmentStatus: e.fulfillment_status ?? null,
+      deliveryAddress: e.delivery_address ?? null,
+      estimatedDelivery: e.estimated_delivery ?? null,
     }));
     const merged = [...fromAppts, ...fromEntries].sort((a, b) => b.date.localeCompare(a.date));
     setSales(merged);
@@ -324,6 +335,15 @@ export default function SalesPage() {
     if (error) { toast.error("No se pudo actualizar el estado del pedido"); return; }
     setSales(prev => prev.map(sale =>
       sale.id === saleId ? { ...sale, fulfillmentStatus: status } : sale
+    ));
+  };
+
+  const changeEstimatedDelivery = async (saleId: string, estimatedDelivery: string) => {
+    const realId = saleId.replace("entry-", "");
+    const { error } = await supabase.from("sales_entries").update({ estimated_delivery: estimatedDelivery || null }).eq("id", realId);
+    if (error) { toast.error("No se pudo actualizar el tiempo de entrega"); return; }
+    setSales(prev => prev.map(sale =>
+      sale.id === saleId ? { ...sale, estimatedDelivery: estimatedDelivery || null } : sale
     ));
   };
 
@@ -612,13 +632,13 @@ export default function SalesPage() {
             </div>
             
             <TabsContent value="all" className="mt-0">
-              <SalesTable sales={filteredSales} onMarkAsPaid={markAsPaid} onChangeFulfillmentStatus={changeFulfillmentStatus} />
+              <SalesTable sales={filteredSales} onMarkAsPaid={markAsPaid} onChangeFulfillmentStatus={changeFulfillmentStatus} onChangeEstimatedDelivery={changeEstimatedDelivery} />
             </TabsContent>
             <TabsContent value="paid" className="mt-0">
-              <SalesTable sales={filteredSales} onMarkAsPaid={markAsPaid} onChangeFulfillmentStatus={changeFulfillmentStatus} />
+              <SalesTable sales={filteredSales} onMarkAsPaid={markAsPaid} onChangeFulfillmentStatus={changeFulfillmentStatus} onChangeEstimatedDelivery={changeEstimatedDelivery} />
             </TabsContent>
             <TabsContent value="pending" className="mt-0">
-              <SalesTable sales={filteredSales} onMarkAsPaid={markAsPaid} onChangeFulfillmentStatus={changeFulfillmentStatus} />
+              <SalesTable sales={filteredSales} onMarkAsPaid={markAsPaid} onChangeFulfillmentStatus={changeFulfillmentStatus} onChangeEstimatedDelivery={changeEstimatedDelivery} />
             </TabsContent>
           </Tabs>
         </div>
@@ -723,13 +743,38 @@ const FULFILLMENT_OPTIONS: { value: FulfillmentStatus; label: string; icon: type
   { value: "delivered", label: "Entregado", icon: PackageCheck, className: "bg-success/10 text-success border-success/20" },
 ];
 
+function EstimatedDeliveryInput({
+  saleId,
+  value,
+  onSave,
+}: {
+  saleId: string;
+  value: string | null;
+  onSave: (id: string, estimatedDelivery: string) => void;
+}) {
+  const [draft, setDraft] = useState(value ?? "");
+
+  return (
+    <Input
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        if (draft !== (value ?? "")) onSave(saleId, draft);
+      }}
+      placeholder="Tiempo de entrega (ej: 30-45 min)"
+      className="h-7 w-auto min-w-[160px] text-xs border-none bg-transparent px-0 focus-visible:ring-0"
+    />
+  );
+}
+
 interface SalesTableProps {
   sales: Sale[];
   onMarkAsPaid: (id: string, method: string) => void;
   onChangeFulfillmentStatus: (id: string, status: FulfillmentStatus) => void;
+  onChangeEstimatedDelivery: (id: string, estimatedDelivery: string) => void;
 }
 
-function SalesTable({ sales, onMarkAsPaid, onChangeFulfillmentStatus }: SalesTableProps) {
+function SalesTable({ sales, onMarkAsPaid, onChangeFulfillmentStatus, onChangeEstimatedDelivery }: SalesTableProps) {
   const [paymentDialog, setPaymentDialog] = useState<string | null>(null);
   const [selectedMethod, setSelectedMethod] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -778,7 +823,18 @@ function SalesTable({ sales, onMarkAsPaid, onChangeFulfillmentStatus }: SalesTab
                 <td className="py-4 px-4">
                   <p className="font-medium">{sale.client}</p>
                 </td>
-                <td className="py-4 px-4 text-muted-foreground">{sale.service}</td>
+                <td className="py-4 px-4 text-muted-foreground">
+                  <div>{sale.service}</div>
+                  {sale.deliveryAddress && (
+                    <div
+                      className="flex items-center gap-1 text-xs text-muted-foreground/80 mt-0.5 max-w-[220px] truncate"
+                      title={sale.deliveryAddress}
+                    >
+                      <MapPin className="w-3 h-3 shrink-0" />
+                      <span className="truncate">{sale.deliveryAddress}</span>
+                    </div>
+                  )}
+                </td>
                 <td className="py-4 px-4 text-muted-foreground hidden md:table-cell">{sale.stylist}</td>
                 <td className="py-4 px-4 text-sm text-muted-foreground hidden sm:table-cell">
                   <div>{sale.date}</div>
@@ -798,24 +854,31 @@ function SalesTable({ sales, onMarkAsPaid, onChangeFulfillmentStatus }: SalesTab
                       </Badge>
                     )}
                     {sale.fulfillmentStatus && (
-                      <Select
-                        value={sale.fulfillmentStatus}
-                        onValueChange={(value) => onChangeFulfillmentStatus(sale.id, value as FulfillmentStatus)}
-                      >
-                        <SelectTrigger className="h-7 w-auto gap-1 text-xs border-none bg-transparent p-0 focus:ring-0">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {FULFILLMENT_OPTIONS.map((opt) => (
-                            <SelectItem key={opt.value} value={opt.value}>
-                              <span className="flex items-center gap-1.5">
-                                <opt.icon className="w-3.5 h-3.5" />
-                                {opt.label}
-                              </span>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <>
+                        <Select
+                          value={sale.fulfillmentStatus}
+                          onValueChange={(value) => onChangeFulfillmentStatus(sale.id, value as FulfillmentStatus)}
+                        >
+                          <SelectTrigger className="h-7 w-auto gap-1 text-xs border-none bg-transparent p-0 focus:ring-0">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {FULFILLMENT_OPTIONS.map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value}>
+                                <span className="flex items-center gap-1.5">
+                                  <opt.icon className="w-3.5 h-3.5" />
+                                  {opt.label}
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <EstimatedDeliveryInput
+                          saleId={sale.id}
+                          value={sale.estimatedDelivery}
+                          onSave={onChangeEstimatedDelivery}
+                        />
+                      </>
                     )}
                   </div>
                 </td>
