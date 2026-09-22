@@ -12,6 +12,7 @@ export interface Client {
   balance: number;
   balanceDueDate?: string;
   identificationNumber: string;
+  pipelineStageId?: string;
 }
 
 // Helper functions
