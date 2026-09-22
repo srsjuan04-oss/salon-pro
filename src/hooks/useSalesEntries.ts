@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 
+export type FulfillmentStatus = "preparing" | "out_for_delivery" | "delivered";
+
 export interface Sale {
   id: string;
   client: string;
@@ -12,6 +14,8 @@ export interface Sale {
   time: string;
   method: string;
   status: "paid" | "pending";
+  /** Solo presente en pedidos de producto hechos por el bot (request_product). */
+  fulfillmentStatus: FulfillmentStatus | null;
 }
 
 /**
@@ -44,6 +48,7 @@ export function useSales() {
         time: (a.start_time ?? "").slice(0, 5),
         method: a.status === "completed" ? "Efectivo" : "-",
         status: a.status === "completed" ? "paid" : "pending",
+        fulfillmentStatus: null,
       }));
       const fromEntries: Sale[] = (entryRes.data ?? []).map((e: any) => ({
         id: `entry-${e.id}`,
@@ -55,6 +60,7 @@ export function useSales() {
         time: e.sale_time ?? "",
         method: e.payment_method ?? "-",
         status: e.status === "pending" ? "pending" : "paid",
+        fulfillmentStatus: e.fulfillment_status ?? null,
       }));
 
       return [...fromAppts, ...fromEntries].sort((a, b) => b.date.localeCompare(a.date));
@@ -79,6 +85,28 @@ export function useCreateSale() {
         source: "manual",
         created_by: userData.user?.id,
       } as any);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sales"] });
+    },
+  });
+}
+
+/**
+ * Solo aplica a filas de sales_entries (pedidos de producto vía WhatsApp,
+ * id con prefijo "entry-"). Las citas no tienen estado de entrega.
+ */
+export function useUpdateFulfillmentStatus() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ saleId, status }: { saleId: string; status: FulfillmentStatus }) => {
+      const realId = saleId.replace("entry-", "");
+      const { error } = await supabase
+        .from("sales_entries")
+        .update({ fulfillment_status: status })
+        .eq("id", realId);
       if (error) throw error;
     },
     onSuccess: () => {

@@ -101,7 +101,8 @@ mcp.tool("list_services", {
   description:
     "Lista los servicios y productos activos, con su descripción, beneficios, precio, tipo y foto. " +
     "item_type=\"service\" se agenda con create_appointment (tiene duración y barbero). " +
-    "item_type=\"product\" se vende sin cita: usa request_product en su lugar. " +
+    "item_type=\"product\" se vende sin cita: usa request_product para pedirlo y " +
+    "get_product_orders para ver el estado de un pedido anterior. " +
     "Si image_url no es null, compártela con el cliente (pégala tal cual en el chat) cuando pregunte cómo se ve.",
   inputSchema: z.object({}),
   handler: async () => {
@@ -247,11 +248,18 @@ mcp.tool("find_or_create_customer", {
   },
 });
 
+const FULFILLMENT_ES: Record<string, string> = {
+  preparing: "en preparación",
+  out_for_delivery: "en reparto",
+  delivered: "entregado",
+};
+
 mcp.tool("request_product", {
   description:
-    "Registra que un cliente quiere un producto (item_type=\"product\" en list_services). " +
-    "No agenda cita ni requiere barbero/fecha/hora — solo deja el pedido anotado en el historial " +
-    "del cliente para que el negocio le dé seguimiento. Puedes pasar customer_id O " +
+    "Registra el pedido de un producto (item_type=\"product\" en list_services) como una venta " +
+    "pendiente en Ventas, con estado de entrega inicial \"en preparación\" — así el negocio le da " +
+    "seguimiento y tú puedes informarle el estado si el cliente vuelve a preguntar (usa " +
+    "get_product_orders). No agenda cita ni requiere barbero/fecha/hora. Puedes pasar customer_id O " +
     "customer_phone + customer_name.",
   inputSchema: z.object({
     customer_id: z.string().optional(),
@@ -264,22 +272,29 @@ mcp.tool("request_product", {
   handler: async (args) => {
     const org = requireOrg();
     let customerId = args.customer_id;
+    let customerName = args.customer_name;
     if (!customerId) {
       if (!args.customer_phone) throw new Error("Falta customer_id o customer_phone.");
       const tail = args.customer_phone.replace(/\D/g, "").slice(-10);
-      const { data: matches } = await supabase.from("customers").select("id")
+      const { data: matches } = await supabase.from("customers").select("id, name")
         .eq("organization_id", org)
         .or(`phone.ilike.%${tail}%,whatsapp_id.ilike.%${tail}%`).limit(1);
       const existing = matches?.[0];
-      if (existing) customerId = existing.id;
-      else {
+      if (existing) {
+        customerId = existing.id;
+        customerName = existing.name;
+      } else {
         if (!args.customer_name) throw new Error("Cliente nuevo: se requiere customer_name.");
         const { data: created, error: ce } = await supabase.from("customers").insert({
           phone: args.customer_phone, name: args.customer_name, organization_id: org,
-        }).select("id").single();
+        }).select("id, name").single();
         if (ce) throw new Error(`No se pudo crear el cliente: ${ce.message}`);
         customerId = created.id;
+        customerName = created.name;
       }
+    } else if (!customerName) {
+      const { data: cust } = await supabase.from("customers").select("name").eq("id", customerId).maybeSingle();
+      customerName = cust?.name ?? "Cliente";
     }
 
     const { data: products } = await supabase.from("services")
@@ -292,15 +307,61 @@ mcp.tool("request_product", {
 
     const quantity = args.quantity && args.quantity > 0 ? args.quantity : 1;
     const total = Number(product.price) * quantity;
-    const { data, error } = await supabase.from("customer_notes").insert({
+    const now = new Date();
+    const { data, error } = await supabase.from("sales_entries").insert({
+      client_name: customerName ?? "Cliente",
+      service_name: quantity > 1 ? `${quantity}x ${product.name}` : product.name,
+      amount: total,
+      sale_date: now.toISOString().slice(0, 10),
+      sale_time: now.toISOString().slice(11, 16),
+      status: "pending",
+      fulfillment_status: "preparing",
+      source: "whatsapp",
       customer_id: customerId,
       organization_id: org,
-      note_type: "product_request",
-      source: "whatsapp",
-      content: `Pidió ${quantity}x "${product.name}" ($${total.toLocaleString()} total).${args.notes ? ` Notas: ${args.notes}` : ""}`,
     }).select().single();
     if (error) throw new Error(error.message);
-    return ok({ ...data, product: product.name, quantity, total });
+    return ok({
+      ...data,
+      product: product.name,
+      quantity,
+      total,
+      fulfillment_status_es: FULFILLMENT_ES[data.fulfillment_status as string] ?? data.fulfillment_status,
+    });
+  },
+});
+
+mcp.tool("get_product_orders", {
+  description:
+    "Lista los pedidos de producto de un cliente (más recientes primero) con su estado de entrega: " +
+    "\"en preparación\", \"en reparto\" o \"entregado\". Úsalo cuando el cliente pregunte por un " +
+    "pedido que hizo antes.",
+  inputSchema: z.object({
+    customer_id: z.string().optional(),
+    phone: z.string().optional(),
+    limit: z.number().optional(),
+  }),
+  handler: async ({ customer_id, phone, limit }) => {
+    const org = requireOrg();
+    let cid = customer_id;
+    if (!cid && phone) {
+      const tail = phone.replace(/\D/g, "").slice(-10);
+      const { data: cust } = await supabase.from("customers").select("id")
+        .eq("organization_id", org)
+        .or(`phone.ilike.%${tail}%,whatsapp_id.ilike.%${tail}%`).limit(1).maybeSingle();
+      cid = cust?.id;
+    }
+    if (!cid) return ok([]);
+    const { data, error } = await supabase.from("sales_entries")
+      .select("id, service_name, amount, sale_date, sale_time, status, fulfillment_status")
+      .eq("customer_id", cid).eq("organization_id", org)
+      .not("fulfillment_status", "is", null)
+      .order("created_at", { ascending: false }).limit(limit ?? 5);
+    if (error) throw new Error(error.message);
+    return ok((data ?? []).map((o: any) => ({
+      ...o,
+      fulfillment_status_es: FULFILLMENT_ES[o.fulfillment_status] ?? o.fulfillment_status,
+    })));
   },
 });
 
