@@ -99,13 +99,14 @@ async function resolveServiceId(value?: string): Promise<string | undefined> {
 
 mcp.tool("list_services", {
   description:
-    "Lista los servicios y productos activos, con su descripción, beneficios, precio y tipo. " +
+    "Lista los servicios y productos activos, con su descripción, beneficios, precio, tipo y foto. " +
     "item_type=\"service\" se agenda con create_appointment (tiene duración y barbero). " +
-    "item_type=\"product\" se vende sin cita: usa request_product en su lugar.",
+    "item_type=\"product\" se vende sin cita: usa request_product en su lugar. " +
+    "Si image_url no es null, compártela con el cliente (pégala tal cual en el chat) cuando pregunte cómo se ve.",
   inputSchema: z.object({}),
   handler: async () => {
     const { data, error } = await supabase.from("services")
-      .select("id, name, description, benefits, item_type, duration_minutes, price")
+      .select("id, name, description, benefits, item_type, duration_minutes, price, image_url")
       .eq("is_active", true).eq("organization_id", requireOrg());
     if (error) throw new Error(error.message);
     return ok(data);

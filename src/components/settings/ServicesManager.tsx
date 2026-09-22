@@ -10,9 +10,20 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter,
 } from "@/components/ui/dialog";
-import { Plus, Pencil, Trash2, Scissors, Package } from "lucide-react";
+import { Plus, Pencil, Trash2, Scissors, Package, ImagePlus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
+async function uploadCatalogImage(serviceId: string, file: File): Promise<string> {
+  const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+  const path = `${serviceId}/${Date.now()}.${ext}`;
+  const { error } = await supabase.storage.from("catalog-images").upload(path, file, { upsert: true });
+  if (error) throw error;
+  const { data } = supabase.storage.from("catalog-images").getPublicUrl(path);
+  return data.publicUrl;
+}
 
 type ItemType = "service" | "product";
 
@@ -25,6 +36,7 @@ type Service = {
   duration_minutes: number;
   price: number;
   is_active: boolean;
+  image_url: string | null;
 };
 
 type FormState = {
@@ -52,6 +64,9 @@ export function ServicesManager() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<FormState>(empty);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [removeImage, setRemoveImage] = useState(false);
 
   const { data: services, isLoading } = useQuery({
     queryKey: ["services", "all"],
@@ -79,19 +94,47 @@ export function ServicesManager() {
       if (f.id) {
         const { error } = await supabase.from("services").update(payload).eq("id", f.id);
         if (error) throw error;
+        return f.id;
       } else {
-        const { error } = await supabase.from("services").insert(payload as any);
+        const { data, error } = await supabase.from("services").insert(payload as any).select("id").single();
         if (error) throw error;
+        return data.id as string;
       }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["services"] });
-      setOpen(false);
-      setForm(empty);
-      toast.success("Servicio guardado");
     },
     onError: (e: any) => toast.error(e.message),
   });
+
+  const [saving, setSaving] = useState(false);
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const serviceId = await upsert.mutateAsync(form);
+      if (imageFile) {
+        try {
+          const url = await uploadCatalogImage(serviceId, imageFile);
+          const { error } = await supabase.from("services").update({ image_url: url }).eq("id", serviceId);
+          if (error) throw error;
+        } catch {
+          toast.error("Se guardó, pero no se pudo subir la foto. Intenta de nuevo.");
+        }
+      } else if (removeImage && form.id) {
+        const { error } = await supabase.from("services").update({ image_url: null }).eq("id", serviceId);
+        if (error) throw error;
+      }
+      qc.invalidateQueries({ queryKey: ["services"] });
+      setOpen(false);
+      setForm(empty);
+      setImageFile(null);
+      setImagePreview(null);
+      setRemoveImage(false);
+      toast.success("Servicio guardado");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
@@ -105,7 +148,13 @@ export function ServicesManager() {
     onError: (e: any) => toast.error(e.message),
   });
 
-  const openNew = () => { setForm(empty); setOpen(true); };
+  const openNew = () => {
+    setForm(empty);
+    setImageFile(null);
+    setImagePreview(null);
+    setRemoveImage(false);
+    setOpen(true);
+  };
   const openEdit = (s: Service) => {
     setForm({
       id: s.id,
@@ -117,6 +166,9 @@ export function ServicesManager() {
       price: Number(s.price),
       is_active: s.is_active,
     });
+    setImageFile(null);
+    setImagePreview(s.image_url);
+    setRemoveImage(false);
     setOpen(true);
   };
 
@@ -163,6 +215,60 @@ export function ServicesManager() {
                 </p>
               </div>
               <div className="space-y-2">
+                <Label>Foto (opcional)</Label>
+                {imagePreview ? (
+                  <div className="flex items-center gap-3">
+                    <img src={imagePreview} alt="" className="w-16 h-16 rounded-lg object-cover border" />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="gap-1"
+                      onClick={() => {
+                        setImageFile(null);
+                        setImagePreview(null);
+                        setRemoveImage(true);
+                      }}
+                    >
+                      <X className="w-3.5 h-3.5" /> Quitar
+                    </Button>
+                  </div>
+                ) : (
+                  <div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      id="catalog-image-input"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        if (file.size > MAX_IMAGE_BYTES) {
+                          toast.error("La imagen no puede pesar más de 5MB");
+                          e.target.value = "";
+                          return;
+                        }
+                        setImageFile(file);
+                        setImagePreview(URL.createObjectURL(file));
+                        setRemoveImage(false);
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="gap-2"
+                      onClick={() => document.getElementById("catalog-image-input")?.click()}
+                    >
+                      <ImagePlus className="w-4 h-4" /> Subir foto
+                    </Button>
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  El cliente podrá verla cuando el asistente se la muestre por WhatsApp.
+                </p>
+              </div>
+              <div className="space-y-2">
                 <Label>Nombre</Label>
                 <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Corte de cabello" />
               </div>
@@ -204,8 +310,8 @@ export function ServicesManager() {
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-              <Button onClick={() => upsert.mutate(form)} disabled={!form.name || upsert.isPending}>
+              <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancelar</Button>
+              <Button onClick={handleSave} disabled={!form.name || saving}>
                 Guardar
               </Button>
             </DialogFooter>
@@ -223,7 +329,14 @@ export function ServicesManager() {
       ) : (
         <div className="divide-y">
           {services.map((s) => (
-            <div key={s.id} className="flex items-center justify-between py-3">
+            <div key={s.id} className="flex items-center justify-between py-3 gap-3">
+              {s.image_url ? (
+                <img src={s.image_url} alt="" className="w-12 h-12 rounded-lg object-cover border shrink-0" />
+              ) : (
+                <div className="w-12 h-12 rounded-lg border border-dashed flex items-center justify-center shrink-0 text-muted-foreground">
+                  {s.item_type === "product" ? <Package className="w-5 h-5" /> : <Scissors className="w-5 h-5" />}
+                </div>
+              )}
               <div className="flex-1">
                 <div className="flex items-center gap-2">
                   <p className="font-medium">{s.name}</p>
