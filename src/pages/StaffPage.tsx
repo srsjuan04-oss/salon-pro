@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import type { UseFormReturn } from "react-hook-form";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +13,7 @@ import {
   Scissors,
   Power,
   Clock,
+  Pencil,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -30,9 +32,10 @@ import {
   useStaffAppointments,
   useToggleBarberActive,
   useTodayStaffAppointments,
+  useUpdateBarber,
 } from "@/hooks/useStaff";
 import { reportError } from "@/lib/errors";
-import { staffMemberSchema } from "@/lib/schemas/staff";
+import { staffMemberSchema, type StaffMemberFormValues } from "@/lib/schemas/staff";
 import { DateRangeFilterBar } from "@/components/shared/DateRangeFilterBar";
 import { EntityCard } from "@/components/shared/EntityCard";
 import { EntityFormDialog } from "@/components/shared/EntityFormDialog";
@@ -58,6 +61,98 @@ export default function StaffPage() {
   });
 
   const { data: services } = useServices();
+
+  const renderStaffMemberFields = (form: UseFormReturn<StaffMemberFormValues>) => (
+    <>
+      <FormField
+        control={form.control}
+        name="name"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Nombre completo</FormLabel>
+            <FormControl>
+              <Input placeholder="Nombre del barbero" {...field} />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <FormField
+          control={form.control}
+          name="email"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Correo electrónico</FormLabel>
+              <FormControl>
+                <Input type="email" placeholder="correo@salon.com" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="phone"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Teléfono</FormLabel>
+              <FormControl>
+                <Input type="tel" placeholder="+57 300 000 0000" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </div>
+
+      <FormField
+        control={form.control}
+        name="specialty"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel className="flex items-center gap-2">
+              <Scissors className="w-4 h-4" />
+              Especialidad
+            </FormLabel>
+            <div className="flex gap-2">
+              <FormControl>
+                <Input placeholder="Ej: Corte y barba" {...field} />
+              </FormControl>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button type="button" variant="outline" size="icon" title="Elegir servicio">
+                    <Scissors className="h-4 w-4" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[260px] p-0 bg-popover" align="end">
+                  <Command>
+                    <CommandInput placeholder="Buscar servicio..." />
+                    <CommandList>
+                      <CommandEmpty>No hay servicios configurados.</CommandEmpty>
+                      <CommandGroup>
+                        {(services ?? []).map((service) => (
+                          <CommandItem
+                            key={service.id}
+                            value={service.name}
+                            onSelect={() => field.onChange(service.name)}
+                          >
+                            {service.name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+    </>
+  );
 
   // Barbers = the same source the calendar uses
   const { data: barbers, isLoading: loadingBarbers } = useAllBarbers();
@@ -85,10 +180,14 @@ export default function StaffPage() {
   const { data: todayAppointments } = useTodayStaffAppointments();
 
   const createBarber = useCreateBarber();
+  const updateBarber = useUpdateBarber();
   const toggleActive = useToggleBarberActive();
 
   const [accessBarber, setAccessBarber] = useState<{ id: string; name: string; email: string } | null>(null);
   const [scheduleBarber, setScheduleBarber] = useState<{ id: string; name: string } | null>(null);
+  const [editBarber, setEditBarber] = useState<
+    { id: string; name: string; email: string; phone: string; specialty: string } | null
+  >(null);
 
   const statsByBarber = useMemo(() => {
     const map: Record<string, { sales: number; completed: number; total: number }> = {};
@@ -254,6 +353,23 @@ export default function StaffPage() {
                   )}
 
                   <div className="flex flex-wrap gap-2 mt-3">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1"
+                      onClick={() =>
+                        setEditBarber({
+                          id: member.id,
+                          name: member.name,
+                          email: member.email ?? "",
+                          phone: member.phone ?? "",
+                          specialty: member.specialty ?? "",
+                        })
+                      }
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                      Editar
+                    </Button>
                     {!member.user_id && member.email && (
                       <Button
                         size="sm"
@@ -315,97 +431,35 @@ export default function StaffPage() {
         submitLabel="Agregar Miembro"
         className="sm:max-w-[500px]"
       >
-        {(form) => (
-          <>
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Nombre completo</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Nombre del barbero" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+        {(form) => renderStaffMemberFields(form)}
+      </EntityFormDialog>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Correo electrónico</FormLabel>
-                    <FormControl>
-                      <Input type="email" placeholder="correo@salon.com" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="phone"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Teléfono</FormLabel>
-                    <FormControl>
-                      <Input type="tel" placeholder="+57 300 000 0000" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <FormField
-              control={form.control}
-              name="specialty"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="flex items-center gap-2">
-                    <Scissors className="w-4 h-4" />
-                    Especialidad
-                  </FormLabel>
-                  <div className="flex gap-2">
-                    <FormControl>
-                      <Input placeholder="Ej: Corte y barba" {...field} />
-                    </FormControl>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button type="button" variant="outline" size="icon" title="Elegir servicio">
-                          <Scissors className="h-4 w-4" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[260px] p-0 bg-popover" align="end">
-                        <Command>
-                          <CommandInput placeholder="Buscar servicio..." />
-                          <CommandList>
-                            <CommandEmpty>No hay servicios configurados.</CommandEmpty>
-                            <CommandGroup>
-                              {(services ?? []).map((service) => (
-                                <CommandItem
-                                  key={service.id}
-                                  value={service.name}
-                                  onSelect={() => field.onChange(service.name)}
-                                >
-                                  {service.name}
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </>
-        )}
+      <EntityFormDialog<typeof staffMemberSchema>
+        open={!!editBarber}
+        onOpenChange={(open) => !open && setEditBarber(null)}
+        title="Editar Miembro del Staff"
+        schema={staffMemberSchema}
+        defaultValues={{
+          name: editBarber?.name ?? "",
+          email: editBarber?.email ?? "",
+          phone: editBarber?.phone ?? "",
+          specialty: editBarber?.specialty ?? "",
+        }}
+        onSubmit={async (values) => {
+          if (!editBarber) return;
+          await updateBarber.mutateAsync({
+            id: editBarber.id,
+            name: values.name,
+            email: values.email || null,
+            phone: values.phone || null,
+            specialty: values.specialty || null,
+          });
+          toast.success("Miembro actualizado");
+        }}
+        submitLabel="Guardar cambios"
+        className="sm:max-w-[500px]"
+      >
+        {(form) => renderStaffMemberFields(form)}
       </EntityFormDialog>
 
       <CreateTeamAccessDialog

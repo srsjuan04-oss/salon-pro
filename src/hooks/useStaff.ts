@@ -65,6 +65,24 @@ export function useCreateBarber() {
   });
 }
 
+export function useUpdateBarber() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      id,
+      ...payload
+    }: { id: string; name: string; email: string | null; phone: string | null; specialty: string | null }) => {
+      const { error } = await supabase.from("barbers").update(payload).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["barbers-all"] });
+      queryClient.invalidateQueries({ queryKey: ["barbers"] });
+    },
+  });
+}
+
 export function useToggleBarberActive() {
   const queryClient = useQueryClient();
 
