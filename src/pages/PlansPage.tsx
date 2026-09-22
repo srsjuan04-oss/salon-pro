@@ -42,6 +42,7 @@ interface Plan {
   target_audience: string | null;
   features: string[];
   included_bookings: number | null;
+  implementation_fee_cents: number;
 }
 
 const currency = new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 });
@@ -129,7 +130,7 @@ export default function PlansPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("subscription_plans")
-        .select("code, name, amount_in_cents, currency, target_audience, features, included_bookings")
+        .select("code, name, amount_in_cents, currency, target_audience, features, included_bookings, implementation_fee_cents")
         .eq("active", true)
         .order("sort_order");
       if (error) throw error;
@@ -437,6 +438,11 @@ export default function PlansPage() {
                       {plan.included_bookings} agendamientos incluidos
                     </p>
                   )}
+                  {plan.implementation_fee_cents > 0 && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      + {currency.format(plan.implementation_fee_cents / 100)} implementación (pago único)
+                    </p>
+                  )}
                   <ul className="mt-4 space-y-2 flex-1">
                     {plan.features.map((feature) => (
                       <li key={feature} className="flex items-start gap-2 text-sm">
@@ -467,6 +473,9 @@ export default function PlansPage() {
               <CardTitle>Completa tu registro y pago</CardTitle>
               <CardDescription>
                 Plan {selectedPlan.name} — {currency.format(selectedPlan.amount_in_cents / 100)}/mes, renovación automática
+                {selectedPlan.implementation_fee_cents > 0 && (
+                  <> · + {currency.format(selectedPlan.implementation_fee_cents / 100)} implementación (pago único, hoy)</>
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -672,8 +681,15 @@ export default function PlansPage() {
                   disabled={!canSubmit || status === "processing" || status === "confirming"}
                 >
                   {(status === "processing" || status === "confirming") && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                  {statusMessage ?? `Pagar ${currency.format(selectedPlan.amount_in_cents / 100)}`}
+                  {statusMessage ??
+                    `Pagar ${currency.format((selectedPlan.amount_in_cents + selectedPlan.implementation_fee_cents) / 100)} hoy`}
                 </Button>
+                {selectedPlan.implementation_fee_cents > 0 && !statusMessage && (
+                  <p className="text-center text-xs text-muted-foreground -mt-3">
+                    Incluye {currency.format(selectedPlan.implementation_fee_cents / 100)} de implementación (pago único) +
+                    {" "}{currency.format(selectedPlan.amount_in_cents / 100)} del primer mes
+                  </p>
+                )}
                 <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
                   <ShieldCheck className="w-3.5 h-3.5 text-success" />
                   Transacción cifrada y procesada de forma segura por Wompi

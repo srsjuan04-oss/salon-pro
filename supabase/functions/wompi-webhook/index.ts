@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
 
     const { data: payment, error: findError } = await admin
       .from("subscription_payments")
-      .select("id, subscription_id")
+      .select("id, subscription_id, kind")
       .eq("reference", reference)
       .maybeSingle();
     if (findError) throw new Error(findError.message);
@@ -76,6 +76,13 @@ Deno.serve(async (req) => {
       })
       .eq("id", payment.id);
     if (updatePaymentError) throw new Error(updatePaymentError.message);
+
+    // El cobro de implementación es único y no debe activar/extender la
+    // suscripción ni contar como un ciclo de facturación fallido — solo se
+    // registra su propio estado arriba.
+    if (payment.kind === "implementation_fee") {
+      return json({ received: true });
+    }
 
     if (status === "APPROVED") {
       const nextChargeDate = new Date();
