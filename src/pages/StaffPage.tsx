@@ -16,6 +16,7 @@ import {
   Scissors,
   Power,
   Pencil,
+  Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -36,6 +37,7 @@ import { es } from "date-fns/locale";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useServices } from "@/hooks/useAppointments";
+import { BarberScheduleDialog } from "@/components/staff/BarberScheduleDialog";
 import { toast } from "sonner";
 
 type TimeFilter = "today" | "yesterday" | "15days" | "30days" | "custom";
@@ -176,6 +178,8 @@ export default function StaffPage() {
     },
     onError: () => toast.error("No se pudo actualizar el estado"),
   });
+
+  const [scheduleBarber, setScheduleBarber] = useState<{ id: string; name: string } | null>(null);
 
   const [accessBarber, setAccessBarber] = useState<{ id: string; name: string; email: string } | null>(null);
   const [accessPassword, setAccessPassword] = useState("");
@@ -475,6 +479,15 @@ export default function StaffPage() {
                         Crear acceso
                       </Button>
                     )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1"
+                      onClick={() => setScheduleBarber({ id: member.id, name: member.name })}
+                    >
+                      <Clock className="w-3.5 h-3.5" />
+                      Horario
+                    </Button>
                   </div>
 
                   <div className="grid grid-cols-3 gap-3 pt-4 border-t border-border">
@@ -733,6 +746,15 @@ export default function StaffPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {scheduleBarber && (
+        <BarberScheduleDialog
+          open={!!scheduleBarber}
+          onOpenChange={(open) => !open && setScheduleBarber(null)}
+          barberId={scheduleBarber.id}
+          barberName={scheduleBarber.name}
+        />
+      )}
     </DashboardLayout>
   );
 }
