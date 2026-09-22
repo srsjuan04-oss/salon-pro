@@ -15,6 +15,7 @@ import {
   Landmark,
   Loader2,
   Scissors,
+  ShieldCheck,
   Smartphone,
   Wallet,
 } from "lucide-react";
@@ -38,6 +39,9 @@ interface Plan {
   name: string;
   amount_in_cents: number;
   currency: string;
+  target_audience: string | null;
+  features: string[];
+  included_bookings: number | null;
 }
 
 const currency = new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 });
@@ -125,7 +129,7 @@ export default function PlansPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("subscription_plans")
-        .select("code, name, amount_in_cents, currency")
+        .select("code, name, amount_in_cents, currency, target_audience, features, included_bookings")
         .eq("active", true)
         .order("sort_order");
       if (error) throw error;
@@ -375,15 +379,23 @@ export default function PlansPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/30 py-10 px-4">
-      <div className="max-w-3xl mx-auto space-y-8">
-        <div className="text-center space-y-2">
+      <div className="max-w-5xl mx-auto space-y-8">
+        <div className="text-center space-y-3">
           <div className="flex justify-center">
             <div className="w-14 h-14 rounded-2xl gradient-gold shadow-gold flex items-center justify-center">
               <Scissors className="w-7 h-7 text-primary-foreground" />
             </div>
           </div>
-          <h1 className="text-3xl font-bold">Elige tu plan</h1>
-          <p className="text-muted-foreground">Activa CharlIA para tu negocio en minutos</p>
+          <h1 className="text-3xl md:text-4xl font-bold">Elige el plan ideal para tu negocio</h1>
+          <p className="text-muted-foreground max-w-xl mx-auto">
+            Activa CharlIA en minutos: IA por WhatsApp, agenda automática y CRM en un solo lugar
+          </p>
+          <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground pt-1">
+            <ShieldCheck className="w-4 h-4 text-success" />
+            <span>
+              Pago 100% seguro procesado por <span className="font-semibold text-foreground">Wompi</span>
+            </span>
+          </div>
         </div>
 
         {plansLoading ? (
@@ -391,27 +403,66 @@ export default function PlansPage() {
             <Loader2 className="w-6 h-6 animate-spin text-primary" />
           </div>
         ) : (
-          <div className="grid sm:grid-cols-3 gap-4">
-            {plans.map((plan) => (
-              <button
-                key={plan.code}
-                type="button"
-                onClick={() => setSelectedPlan(plan)}
-                className={cn(
-                  "text-left rounded-2xl border-2 p-5 transition-all bg-card",
-                  selectedPlan?.code === plan.code ? "border-primary shadow-gold" : "border-border hover:border-primary/40"
-                )}
-              >
-                <p className="font-semibold">{plan.name}</p>
-                <p className="text-2xl font-bold mt-2">{currency.format(plan.amount_in_cents / 100)}</p>
-                <p className="text-xs text-muted-foreground">/ mes</p>
-              </button>
-            ))}
+          <div className="grid sm:grid-cols-3 gap-5">
+            {plans.map((plan) => {
+              const isSelected = selectedPlan?.code === plan.code;
+              const isRecommended = plan.code === "negocio";
+              return (
+                <button
+                  key={plan.code}
+                  type="button"
+                  onClick={() => setSelectedPlan(plan)}
+                  className={cn(
+                    "relative text-left rounded-2xl border-2 p-6 transition-all bg-card flex flex-col",
+                    isSelected
+                      ? "border-primary shadow-gold sm:-translate-y-1"
+                      : "border-border hover:border-primary/40 hover:shadow-soft"
+                  )}
+                >
+                  {isRecommended && (
+                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 gradient-gold text-primary-foreground text-xs font-semibold px-3 py-1 rounded-full shadow-gold whitespace-nowrap">
+                      Más elegido
+                    </span>
+                  )}
+                  <p className="font-semibold text-lg">{plan.name}</p>
+                  {plan.target_audience && (
+                    <p className="text-xs text-muted-foreground mt-0.5">{plan.target_audience}</p>
+                  )}
+                  <div className="mt-4 flex items-baseline gap-1">
+                    <span className="text-3xl font-bold">{currency.format(plan.amount_in_cents / 100)}</span>
+                    <span className="text-sm text-muted-foreground">/mes</span>
+                  </div>
+                  {plan.included_bookings && (
+                    <p className="text-xs font-medium text-primary mt-1">
+                      {plan.included_bookings} agendamientos incluidos
+                    </p>
+                  )}
+                  <ul className="mt-4 space-y-2 flex-1">
+                    {plan.features.map((feature) => (
+                      <li key={feature} className="flex items-start gap-2 text-sm">
+                        <CheckCircle2 className="w-4 h-4 text-success shrink-0 mt-0.5" />
+                        <span>{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div
+                    className={cn(
+                      "mt-5 text-center text-sm font-medium rounded-lg py-2 border transition-colors",
+                      isSelected
+                        ? "gradient-gold text-primary-foreground border-transparent"
+                        : "border-border text-muted-foreground"
+                    )}
+                  >
+                    {isSelected ? "Plan seleccionado" : "Elegir este plan"}
+                  </div>
+                </button>
+              );
+            })}
           </div>
         )}
 
         {selectedPlan && (
-          <Card>
+          <Card className="max-w-2xl mx-auto">
             <CardHeader>
               <CardTitle>Completa tu registro y pago</CardTitle>
               <CardDescription>
@@ -623,6 +674,10 @@ export default function PlansPage() {
                   {(status === "processing" || status === "confirming") && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                   {statusMessage ?? `Pagar ${currency.format(selectedPlan.amount_in_cents / 100)}`}
                 </Button>
+                <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+                  <ShieldCheck className="w-3.5 h-3.5 text-success" />
+                  Transacción cifrada y procesada de forma segura por Wompi
+                </p>
               </form>
             </CardContent>
           </Card>
