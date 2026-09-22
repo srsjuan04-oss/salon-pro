@@ -310,9 +310,44 @@ mcp.tool("request_product", {
     const quantity = args.quantity && args.quantity > 0 ? args.quantity : 1;
     const total = Number(product.price) * quantity;
     const now = new Date();
+    const serviceName = quantity > 1 ? `${quantity}x ${product.name}` : product.name;
+
+    // Autocurativo: si ya existe un pedido pendiente reciente del mismo cliente
+    // y producto sin dirección (p.ej. el bot lo registró antes de preguntar, o el
+    // cliente respondió con la dirección en un mensaje aparte), se actualiza esa
+    // fila en vez de insertar un pedido duplicado.
+    const recentCutoff = new Date(now.getTime() - 3 * 3600 * 1000).toISOString();
+    const { data: existing } = await supabase.from("sales_entries")
+      .select("id")
+      .eq("organization_id", org)
+      .eq("customer_id", customerId)
+      .eq("service_name", serviceName)
+      .eq("status", "pending")
+      .eq("fulfillment_status", "preparing")
+      .is("delivery_address", null)
+      .gte("created_at", recentCutoff)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (existing) {
+      const { data, error } = await supabase.from("sales_entries")
+        .update({ delivery_address: args.delivery_address })
+        .eq("id", existing.id)
+        .select().single();
+      if (error) throw new Error(error.message);
+      return ok({
+        ...data,
+        product: product.name,
+        quantity,
+        total,
+        fulfillment_status_es: FULFILLMENT_ES[data.fulfillment_status as string] ?? data.fulfillment_status,
+      });
+    }
+
     const { data, error } = await supabase.from("sales_entries").insert({
       client_name: customerName ?? "Cliente",
-      service_name: quantity > 1 ? `${quantity}x ${product.name}` : product.name,
+      service_name: serviceName,
       amount: total,
       sale_date: now.toISOString().slice(0, 10),
       sale_time: now.toISOString().slice(11, 16),
