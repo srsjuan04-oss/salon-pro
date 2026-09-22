@@ -17,6 +17,7 @@ import {
   Scissors,
   ShieldCheck,
   Smartphone,
+  Sparkles,
   Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -373,8 +374,12 @@ export default function PlansPage() {
           </div>
           <h1 className="text-3xl md:text-4xl font-bold">Elige el plan ideal para tu negocio</h1>
           <p className="text-muted-foreground max-w-xl mx-auto">
-            15 días gratis, sin cobros. IA por WhatsApp, agenda automática y CRM en un solo lugar
+            IA por WhatsApp, agenda automática y CRM en un solo lugar
           </p>
+          <div className="inline-flex items-center gap-2 bg-success/10 text-success border border-success/20 rounded-full px-4 py-1.5 text-sm font-semibold">
+            <Sparkles className="w-4 h-4" />
+            Tu prueba gratis de 15 días empieza HOY — no se cobra nada ahora
+          </div>
           <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground pt-1">
             <ShieldCheck className="w-4 h-4 text-success" />
             <span>
@@ -458,8 +463,12 @@ export default function PlansPage() {
               <CardDescription>
                 Plan {selectedPlan.name} — {currency.format(selectedPlan.amount_in_cents / 100)}/mes, renovación automática
                 {selectedPlan.implementation_fee_cents > 0 && (
-                  <> · + {currency.format(selectedPlan.implementation_fee_cents / 100)} implementación (pago único, hoy)</>
+                  <> · + {currency.format(selectedPlan.implementation_fee_cents / 100)} implementación (pago único)</>
                 )}
+                <br />
+                <span className="text-success font-medium">
+                  Empieza hoy tu prueba gratis de 15 días — no se cobra nada en este paso.
+                </span>
               </CardDescription>
             </CardHeader>
             <CardContent>
