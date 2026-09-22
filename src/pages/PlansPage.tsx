@@ -111,13 +111,15 @@ export default function PlansPage() {
         options: { data: { name: adminName, salon_name: salonName } },
       });
       if (signUpError) {
-        throw new Error(
-          signUpError.message.includes("already registered")
-            ? "Este correo ya está registrado. Inicia sesión en vez de crear una cuenta nueva."
-            : signUpError.message
-        );
-      }
-      if (!signUpData.session) {
+        if (!signUpError.message.includes("already registered")) throw new Error(signUpError.message);
+        // Probablemente es un reintento tras un pago fallido: la cuenta ya se
+        // había creado en el primer intento, así que iniciamos sesión con los
+        // mismos datos en vez de dejar al usuario sin salida.
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+        if (signInError || !signInData.session) {
+          throw new Error("Este correo ya está registrado con otra contraseña. Inicia sesión desde tu cuenta y completa el pago ahí.");
+        }
+      } else if (!signUpData.session) {
         throw new Error("Tu cuenta se creó pero necesitas confirmar tu correo antes de continuar. Revísalo e inicia sesión.");
       }
 
