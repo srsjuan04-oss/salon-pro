@@ -16,6 +16,10 @@ export interface Sale {
   status: "paid" | "pending";
   /** Solo presente en pedidos de producto hechos por el bot (request_product). */
   fulfillmentStatus: FulfillmentStatus | null;
+  /** Dirección de envío del pedido (solo pedidos de producto). */
+  deliveryAddress: string | null;
+  /** Tiempo estimado de entrega, editable por el negocio (ej: "30-45 min"). */
+  estimatedDelivery: string | null;
 }
 
 /**
@@ -49,6 +53,8 @@ export function useSales() {
         method: a.status === "completed" ? "Efectivo" : "-",
         status: a.status === "completed" ? "paid" : "pending",
         fulfillmentStatus: null,
+        deliveryAddress: null,
+        estimatedDelivery: null,
       }));
       const fromEntries: Sale[] = (entryRes.data ?? []).map((e: any) => ({
         id: `entry-${e.id}`,
@@ -61,6 +67,8 @@ export function useSales() {
         method: e.payment_method ?? "-",
         status: e.status === "pending" ? "pending" : "paid",
         fulfillmentStatus: e.fulfillment_status ?? null,
+        deliveryAddress: e.delivery_address ?? null,
+        estimatedDelivery: e.estimated_delivery ?? null,
       }));
 
       return [...fromAppts, ...fromEntries].sort((a, b) => b.date.localeCompare(a.date));
@@ -106,6 +114,29 @@ export function useUpdateFulfillmentStatus() {
       const { error } = await supabase
         .from("sales_entries")
         .update({ fulfillment_status: status })
+        .eq("id", realId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sales"] });
+    },
+  });
+}
+
+/**
+ * Solo aplica a filas de sales_entries (pedidos de producto vía WhatsApp,
+ * id con prefijo "entry-"). Permite al negocio anotar/editar el tiempo
+ * estimado de entrega para que el bot lo informe si el cliente pregunta.
+ */
+export function useUpdateEstimatedDelivery() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ saleId, estimatedDelivery }: { saleId: string; estimatedDelivery: string }) => {
+      const realId = saleId.replace("entry-", "");
+      const { error } = await supabase
+        .from("sales_entries")
+        .update({ estimated_delivery: estimatedDelivery || null })
         .eq("id", realId);
       if (error) throw error;
     },

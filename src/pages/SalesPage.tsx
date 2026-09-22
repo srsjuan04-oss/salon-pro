@@ -14,6 +14,7 @@ import {
   Package,
   Truck,
   PackageCheck,
+  MapPin,
 } from "lucide-react";
 import { CsvImportDialog } from "@/components/financial/CsvImportDialog";
 import { ImportHistoryDialog } from "@/components/financial/ImportHistoryDialog";
@@ -46,6 +47,7 @@ import {
   useMarkSaleAsPaid,
   useSales,
   useUpdateFulfillmentStatus,
+  useUpdateEstimatedDelivery,
   type FulfillmentStatus,
   type Sale,
 } from "@/hooks/useSalesEntries";
@@ -77,6 +79,7 @@ export default function SalesPage() {
   const createSale = useCreateSale();
   const markSaleAsPaid = useMarkSaleAsPaid();
   const updateFulfillmentStatus = useUpdateFulfillmentStatus();
+  const updateEstimatedDelivery = useUpdateEstimatedDelivery();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -145,6 +148,13 @@ export default function SalesPage() {
     updateFulfillmentStatus.mutate(
       { saleId, status },
       { onError: (error) => reportError(error, "No se pudo actualizar el estado del pedido") },
+    );
+  };
+
+  const changeEstimatedDelivery = (saleId: string, estimatedDelivery: string) => {
+    updateEstimatedDelivery.mutate(
+      { saleId, estimatedDelivery },
+      { onError: (error) => reportError(error, "No se pudo actualizar el tiempo de entrega") },
     );
   };
 
@@ -342,13 +352,13 @@ export default function SalesPage() {
             </div>
             
             <TabsContent value="all" className="mt-0">
-              <SalesTable sales={filteredSales} onMarkAsPaid={markAsPaid} onChangeFulfillmentStatus={changeFulfillmentStatus} />
+              <SalesTable sales={filteredSales} onMarkAsPaid={markAsPaid} onChangeFulfillmentStatus={changeFulfillmentStatus} onChangeEstimatedDelivery={changeEstimatedDelivery} />
             </TabsContent>
             <TabsContent value="paid" className="mt-0">
-              <SalesTable sales={filteredSales} onMarkAsPaid={markAsPaid} onChangeFulfillmentStatus={changeFulfillmentStatus} />
+              <SalesTable sales={filteredSales} onMarkAsPaid={markAsPaid} onChangeFulfillmentStatus={changeFulfillmentStatus} onChangeEstimatedDelivery={changeEstimatedDelivery} />
             </TabsContent>
             <TabsContent value="pending" className="mt-0">
-              <SalesTable sales={filteredSales} onMarkAsPaid={markAsPaid} onChangeFulfillmentStatus={changeFulfillmentStatus} />
+              <SalesTable sales={filteredSales} onMarkAsPaid={markAsPaid} onChangeFulfillmentStatus={changeFulfillmentStatus} onChangeEstimatedDelivery={changeEstimatedDelivery} />
             </TabsContent>
           </Tabs>
         </div>
@@ -473,13 +483,38 @@ const FULFILLMENT_OPTIONS: { value: FulfillmentStatus; label: string; icon: type
   { value: "delivered", label: "Entregado", icon: PackageCheck, className: "bg-success/10 text-success border-success/20" },
 ];
 
+function EstimatedDeliveryInput({
+  saleId,
+  value,
+  onSave,
+}: {
+  saleId: string;
+  value: string | null;
+  onSave: (id: string, estimatedDelivery: string) => void;
+}) {
+  const [draft, setDraft] = useState(value ?? "");
+
+  return (
+    <Input
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        if (draft !== (value ?? "")) onSave(saleId, draft);
+      }}
+      placeholder="Tiempo de entrega (ej: 30-45 min)"
+      className="h-7 w-auto min-w-[160px] text-xs border-none bg-transparent px-0 focus-visible:ring-0"
+    />
+  );
+}
+
 interface SalesTableProps {
   sales: Sale[];
   onMarkAsPaid: (id: string, method: string) => void;
   onChangeFulfillmentStatus: (id: string, status: FulfillmentStatus) => void;
+  onChangeEstimatedDelivery: (id: string, estimatedDelivery: string) => void;
 }
 
-function SalesTable({ sales, onMarkAsPaid, onChangeFulfillmentStatus }: SalesTableProps) {
+function SalesTable({ sales, onMarkAsPaid, onChangeFulfillmentStatus, onChangeEstimatedDelivery }: SalesTableProps) {
   const [paymentDialog, setPaymentDialog] = useState<string | null>(null);
   const [selectedMethod, setSelectedMethod] = useState("");
 
@@ -523,7 +558,18 @@ function SalesTable({ sales, onMarkAsPaid, onChangeFulfillmentStatus }: SalesTab
                   {(currentPage - 1) * ITEMS_PER_PAGE + index + 1}
                 </TableCell>
                 <TableCell className="font-medium">{sale.client}</TableCell>
-                <TableCell className="text-muted-foreground">{sale.service}</TableCell>
+                <TableCell className="text-muted-foreground">
+                  <div>{sale.service}</div>
+                  {sale.deliveryAddress && (
+                    <div
+                      className="flex items-center gap-1 text-xs text-muted-foreground/80 mt-0.5 max-w-[220px] truncate"
+                      title={sale.deliveryAddress}
+                    >
+                      <MapPin className="w-3 h-3 shrink-0" />
+                      <span className="truncate">{sale.deliveryAddress}</span>
+                    </div>
+                  )}
+                </TableCell>
                 <TableCell className="text-muted-foreground hidden md:table-cell">{sale.stylist}</TableCell>
                 <TableCell className="text-sm text-muted-foreground hidden sm:table-cell">
                   <div>{sale.date}</div>
@@ -543,24 +589,31 @@ function SalesTable({ sales, onMarkAsPaid, onChangeFulfillmentStatus }: SalesTab
                       </Badge>
                     )}
                     {sale.fulfillmentStatus && (
-                      <Select
-                        value={sale.fulfillmentStatus}
-                        onValueChange={(value) => onChangeFulfillmentStatus(sale.id, value as FulfillmentStatus)}
-                      >
-                        <SelectTrigger className="h-7 w-auto gap-1 text-xs border-none bg-transparent p-0 focus:ring-0">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {FULFILLMENT_OPTIONS.map((opt) => (
-                            <SelectItem key={opt.value} value={opt.value}>
-                              <span className="flex items-center gap-1.5">
-                                <opt.icon className="w-3.5 h-3.5" />
-                                {opt.label}
-                              </span>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <>
+                        <Select
+                          value={sale.fulfillmentStatus}
+                          onValueChange={(value) => onChangeFulfillmentStatus(sale.id, value as FulfillmentStatus)}
+                        >
+                          <SelectTrigger className="h-7 w-auto gap-1 text-xs border-none bg-transparent p-0 focus:ring-0">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {FULFILLMENT_OPTIONS.map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value}>
+                                <span className="flex items-center gap-1.5">
+                                  <opt.icon className="w-3.5 h-3.5" />
+                                  {opt.label}
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <EstimatedDeliveryInput
+                          saleId={sale.id}
+                          value={sale.estimatedDelivery}
+                          onSave={onChangeEstimatedDelivery}
+                        />
+                      </>
                     )}
                   </div>
                 </TableCell>
