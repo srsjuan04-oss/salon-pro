@@ -22,6 +22,7 @@ import SettingsPage from "./pages/SettingsPage";
 import PlatformAdminPage from "./pages/PlatformAdminPage";
 import SubscriptionsAdminPage from "./pages/SubscriptionsAdminPage";
 import PlansPage from "./pages/PlansPage";
+import StatsPage from "./pages/StatsPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -38,6 +39,7 @@ const App = () => (
           <Route path="/planes" element={<PlansPage />} />
 
           <Route path="/" element={<ProtectedRoute hideFromBarber><Index /></ProtectedRoute>} />
+          <Route path="/estadisticas" element={<ProtectedRoute hideFromBarber><StatsPage /></ProtectedRoute>} />
           <Route path="/calendar" element={<ProtectedRoute><CalendarPage /></ProtectedRoute>} />
           <Route path="/appointments-history" element={<ProtectedRoute hideFromBarber><AppointmentsHistoryPage /></ProtectedRoute>} />
           <Route path="/clients" element={<ProtectedRoute hideFromBarber><ClientsPage /></ProtectedRoute>} />

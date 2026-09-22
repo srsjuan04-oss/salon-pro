@@ -14,7 +14,8 @@ import {
   ChevronRight,
   LogOut,
   Building2,
-  CreditCard
+  CreditCard,
+  BarChart3
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
@@ -22,6 +23,7 @@ import { Button } from "@/components/ui/button";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/" },
+  { icon: BarChart3, label: "Estadísticas", path: "/estadisticas" },
   { icon: Calendar, label: "Calendario", path: "/calendar" },
   { icon: History, label: "Historial de Citas", path: "/appointments-history" },
   { icon: Users, label: "Clientes", path: "/clients" },
