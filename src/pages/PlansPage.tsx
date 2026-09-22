@@ -521,6 +521,22 @@ export default function PlansPage() {
                   ), a menos que canceles antes.
                 </p>
 
+                <p className="text-xs text-muted-foreground">
+                  Al continuar aceptas nuestros{" "}
+                  <a href="https://www.charliacrm.com/terminos-y-condiciones.html" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
+                    Términos y condiciones
+                  </a>
+                  , la{" "}
+                  <a href="https://www.charliacrm.com/politica-de-privacidad.html" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
+                    Política de privacidad
+                  </a>{" "}
+                  y el{" "}
+                  <a href="https://www.charliacrm.com/tratamiento-de-datos.html" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
+                    Tratamiento de datos
+                  </a>
+                  .
+                </p>
+
                 <Button
                   type="submit"
                   className="w-full gradient-gold shadow-gold"
@@ -537,6 +553,18 @@ export default function PlansPage() {
             </CardContent>
           </Card>
         )}
+
+        <p className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          <a href="https://www.charliacrm.com/terminos-y-condiciones.html" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
+            Términos y condiciones
+          </a>
+          <a href="https://www.charliacrm.com/politica-de-privacidad.html" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
+            Política de privacidad
+          </a>
+          <a href="https://www.charliacrm.com/tratamiento-de-datos.html" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
+            Tratamiento de datos
+          </a>
+        </p>
       </div>
     </div>
   );
