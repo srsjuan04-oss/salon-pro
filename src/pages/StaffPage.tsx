@@ -15,6 +15,7 @@ import {
   Loader2,
   Scissors,
   Power,
+  Pencil,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -139,6 +140,31 @@ export default function StaffPage() {
     onError: () => toast.error("No se pudo agregar el miembro"),
   });
 
+  const [editBarber, setEditBarber] = useState<{ id: string; name: string } | null>(null);
+  const [editFormData, setEditFormData] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    specialty: "",
+  });
+
+  const updateBarber = useMutation({
+    mutationFn: async ({
+      id,
+      ...payload
+    }: { id: string; name: string; email: string | null; phone: string | null; specialty: string | null }) => {
+      const { error } = await supabase.from("barbers").update(payload).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["barbers-all"] });
+      queryClient.invalidateQueries({ queryKey: ["barbers"] });
+      toast.success("Miembro actualizado");
+      setEditBarber(null);
+    },
+    onError: () => toast.error("No se pudo actualizar el miembro"),
+  });
+
   const toggleActive = useMutation({
     mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
       const { error } = await supabase.from("barbers").update({ is_active }).eq("id", id);
@@ -218,6 +244,18 @@ export default function StaffPage() {
       email: formData.email.trim() || null,
       phone: formData.phone.trim() || null,
       specialty: formData.specialty.trim() || null,
+    });
+  };
+
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editBarber || !editFormData.name.trim()) return;
+    updateBarber.mutate({
+      id: editBarber.id,
+      name: editFormData.name.trim(),
+      email: editFormData.email.trim() || null,
+      phone: editFormData.phone.trim() || null,
+      specialty: editFormData.specialty.trim() || null,
     });
   };
 
@@ -408,17 +446,36 @@ export default function StaffPage() {
                     </div>
                   )}
 
-                  {!member.user_id && member.email && (
+                  <div className="flex flex-wrap gap-2 mb-4">
                     <Button
                       size="sm"
                       variant="outline"
-                      className="mb-4 gap-1"
-                      onClick={() => setAccessBarber({ id: member.id, name: member.name, email: member.email! })}
+                      className="gap-1"
+                      onClick={() => {
+                        setEditBarber({ id: member.id, name: member.name });
+                        setEditFormData({
+                          name: member.name,
+                          email: member.email ?? "",
+                          phone: member.phone ?? "",
+                          specialty: member.specialty ?? "",
+                        });
+                      }}
                     >
-                      <UserPlus className="w-3.5 h-3.5" />
-                      Crear acceso
+                      <Pencil className="w-3.5 h-3.5" />
+                      Editar
                     </Button>
-                  )}
+                    {!member.user_id && member.email && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1"
+                        onClick={() => setAccessBarber({ id: member.id, name: member.name, email: member.email! })}
+                      >
+                        <UserPlus className="w-3.5 h-3.5" />
+                        Crear acceso
+                      </Button>
+                    )}
+                  </div>
 
                   <div className="grid grid-cols-3 gap-3 pt-4 border-t border-border">
                     <div>
@@ -536,6 +593,107 @@ export default function StaffPage() {
               >
                 {createBarber.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                 Agregar Miembro
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Editar Miembro */}
+      <Dialog open={!!editBarber} onOpenChange={(open) => !open && setEditBarber(null)}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Editar {editBarber?.name}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleEditSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-name">Nombre completo</Label>
+              <Input
+                id="edit-name"
+                placeholder="Nombre del barbero"
+                value={editFormData.name}
+                onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-email">Correo electrónico</Label>
+                <Input
+                  id="edit-email"
+                  type="email"
+                  placeholder="correo@salon.com"
+                  value={editFormData.email}
+                  onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-phone">Teléfono</Label>
+                <Input
+                  id="edit-phone"
+                  type="tel"
+                  placeholder="+57 300 000 0000"
+                  value={editFormData.phone}
+                  onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-specialty" className="flex items-center gap-2">
+                <Scissors className="w-4 h-4" />
+                Especialidad
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  id="edit-specialty"
+                  placeholder="Ej: Corte y barba"
+                  value={editFormData.specialty}
+                  onChange={(e) => setEditFormData({ ...editFormData, specialty: e.target.value })}
+                />
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button type="button" variant="outline" size="icon" title="Elegir servicio">
+                      <Search className="h-4 w-4" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[260px] p-0 bg-popover" align="end">
+                    <ScrollArea className="h-[200px]">
+                      <div className="p-2 space-y-1">
+                        {(services ?? []).map((service) => (
+                          <button
+                            key={service.id}
+                            type="button"
+                            className="w-full text-left text-sm p-2 rounded-md hover:bg-secondary transition-colors"
+                            onClick={() => setEditFormData({ ...editFormData, specialty: service.name })}
+                          >
+                            {service.name}
+                          </button>
+                        ))}
+                        {(services ?? []).length === 0 && (
+                          <p className="text-xs text-muted-foreground p-2">
+                            No hay servicios configurados.
+                          </p>
+                        )}
+                      </div>
+                    </ScrollArea>
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setEditBarber(null)}>
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                className="gradient-gold shadow-gold"
+                disabled={!editFormData.name.trim() || updateBarber.isPending}
+              >
+                {updateBarber.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                Guardar cambios
               </Button>
             </DialogFooter>
           </form>
