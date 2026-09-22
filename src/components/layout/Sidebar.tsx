@@ -13,7 +13,8 @@ import {
   ChevronLeft,
   ChevronRight,
   LogOut,
-  Building2
+  Building2,
+  CreditCard
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
@@ -30,6 +31,7 @@ const menuItems = [
   { icon: Receipt, label: "Gastos", path: "/expenses" },
   { icon: Settings, label: "Configuración", path: "/settings", adminOnly: true },
   { icon: Building2, label: "Empresas", path: "/empresas", platformAdminOnly: true },
+  { icon: CreditCard, label: "Suscripciones", path: "/suscripciones", platformAdminOnly: true },
 ];
 
 interface SidebarProps {

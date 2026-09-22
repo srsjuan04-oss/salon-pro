@@ -763,6 +763,66 @@ export type Database = {
           },
         ]
       }
+      organization_subscriptions: {
+        Row: {
+          amount_in_cents: number
+          created_at: string
+          customer_email: string
+          failed_attempts: number
+          id: string
+          next_charge_date: string | null
+          organization_id: string
+          payment_source_type: string
+          plan_code: string
+          status: string
+          updated_at: string
+          wompi_payment_source_id: string | null
+        }
+        Insert: {
+          amount_in_cents: number
+          created_at?: string
+          customer_email: string
+          failed_attempts?: number
+          id?: string
+          next_charge_date?: string | null
+          organization_id: string
+          payment_source_type: string
+          plan_code: string
+          status?: string
+          updated_at?: string
+          wompi_payment_source_id?: string | null
+        }
+        Update: {
+          amount_in_cents?: number
+          created_at?: string
+          customer_email?: string
+          failed_attempts?: number
+          id?: string
+          next_charge_date?: string | null
+          organization_id?: string
+          payment_source_type?: string
+          plan_code?: string
+          status?: string
+          updated_at?: string
+          wompi_payment_source_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_subscriptions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_subscriptions_plan_code_fkey"
+            columns: ["plan_code"]
+            isOneToOne: false
+            referencedRelation: "subscription_plans"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
       organizations: {
         Row: {
           ai_monthly_cap_usd: number
@@ -1144,6 +1204,74 @@ export type Database = {
           },
         ]
       }
+      subscription_payments: {
+        Row: {
+          amount_in_cents: number
+          created_at: string
+          id: string
+          raw_response: Json | null
+          reference: string
+          status: string
+          subscription_id: string
+          wompi_transaction_id: string | null
+        }
+        Insert: {
+          amount_in_cents: number
+          created_at?: string
+          id?: string
+          raw_response?: Json | null
+          reference: string
+          status?: string
+          subscription_id: string
+          wompi_transaction_id?: string | null
+        }
+        Update: {
+          amount_in_cents?: number
+          created_at?: string
+          id?: string
+          raw_response?: Json | null
+          reference?: string
+          status?: string
+          subscription_id?: string
+          wompi_transaction_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscription_payments_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "organization_subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      subscription_plans: {
+        Row: {
+          active: boolean
+          amount_in_cents: number
+          code: string
+          currency: string
+          name: string
+          sort_order: number
+        }
+        Insert: {
+          active?: boolean
+          amount_in_cents: number
+          code: string
+          currency?: string
+          name: string
+          sort_order?: number
+        }
+        Update: {
+          active?: boolean
+          amount_in_cents?: number
+          code?: string
+          currency?: string
+          name?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
       tasks: {
         Row: {
           assigned_to: string | null
@@ -1499,6 +1627,16 @@ export type Database = {
         Args: { _appointment_id: string }
         Returns: undefined
       }
+      get_my_subscription: {
+        Args: never
+        Returns: {
+          amount_in_cents: number
+          next_charge_date: string
+          plan_code: string
+          plan_name: string
+          status: string
+        }[]
+      }
       get_platform_organizations: {
         Args: never
         Returns: {
@@ -1515,6 +1653,22 @@ export type Database = {
           organization_name: string
           sales_total: number
           users_count: number
+        }[]
+      }
+      get_platform_subscriptions: {
+        Args: never
+        Returns: {
+          amount_in_cents: number
+          failed_attempts: number
+          next_charge_date: string
+          organization_id: string
+          organization_name: string
+          payment_source_type: string
+          plan_code: string
+          plan_name: string
+          status: string
+          subscription_id: string
+          updated_at: string
         }[]
       }
       has_role: {
