@@ -18,6 +18,9 @@ import {
   ChevronRight,
   Upload,
   History,
+  Package,
+  Truck,
+  PackageCheck,
 } from "lucide-react";
 import { CsvImportDialog } from "@/components/financial/CsvImportDialog";
 import { ImportHistoryDialog } from "@/components/financial/ImportHistoryDialog";
@@ -66,6 +69,8 @@ const services = [
   { name: "Fade", price: 200 },
 ];
 
+type FulfillmentStatus = "preparing" | "out_for_delivery" | "delivered";
+
 interface Sale {
   id: string;
   client: string;
@@ -76,6 +81,8 @@ interface Sale {
   time: string;
   method: string;
   status: "paid" | "pending";
+  /** Solo presente en pedidos de producto hechos por el bot (request_product). */
+  fulfillmentStatus: FulfillmentStatus | null;
 }
 
 // Generamos ventas de los últimos 30 días para demostración
@@ -105,6 +112,7 @@ const generateSalesData = (): Sale[] => {
         time: `${Math.floor(Math.random() * 10) + 8}:${Math.random() > 0.5 ? "00" : "30"}`,
         method: isPaid ? methods[Math.floor(Math.random() * methods.length)] : "-",
         status: isPaid ? "paid" : "pending",
+        fulfillmentStatus: null,
       });
     }
   }
@@ -168,6 +176,7 @@ export default function SalesPage() {
       time: (a.start_time ?? "").slice(0, 5),
       method: a.status === "completed" ? "Efectivo" : "-",
       status: a.status === "completed" ? "paid" : "pending",
+      fulfillmentStatus: null,
     }));
     const fromEntries: Sale[] = (entryRes.data ?? []).map((e: any) => ({
       id: `entry-${e.id}`,
@@ -179,6 +188,7 @@ export default function SalesPage() {
       time: e.sale_time ?? "",
       method: e.payment_method ?? "-",
       status: e.status === "pending" ? "pending" : "paid",
+      fulfillmentStatus: e.fulfillment_status ?? null,
     }));
     const merged = [...fromAppts, ...fromEntries].sort((a, b) => b.date.localeCompare(a.date));
     setSales(merged);
@@ -303,8 +313,17 @@ export default function SalesPage() {
     } else {
       await supabase.from("appointments").update({ status: "completed" }).eq("id", saleId);
     }
-    setSales(prev => prev.map(sale => 
+    setSales(prev => prev.map(sale =>
       sale.id === saleId ? { ...sale, status: "paid" as const, method } : sale
+    ));
+  };
+
+  const changeFulfillmentStatus = async (saleId: string, status: FulfillmentStatus) => {
+    const realId = saleId.replace("entry-", "");
+    const { error } = await supabase.from("sales_entries").update({ fulfillment_status: status }).eq("id", realId);
+    if (error) { toast.error("No se pudo actualizar el estado del pedido"); return; }
+    setSales(prev => prev.map(sale =>
+      sale.id === saleId ? { ...sale, fulfillmentStatus: status } : sale
     ));
   };
 
@@ -593,13 +612,13 @@ export default function SalesPage() {
             </div>
             
             <TabsContent value="all" className="mt-0">
-              <SalesTable sales={filteredSales} onMarkAsPaid={markAsPaid} />
+              <SalesTable sales={filteredSales} onMarkAsPaid={markAsPaid} onChangeFulfillmentStatus={changeFulfillmentStatus} />
             </TabsContent>
             <TabsContent value="paid" className="mt-0">
-              <SalesTable sales={filteredSales} onMarkAsPaid={markAsPaid} />
+              <SalesTable sales={filteredSales} onMarkAsPaid={markAsPaid} onChangeFulfillmentStatus={changeFulfillmentStatus} />
             </TabsContent>
             <TabsContent value="pending" className="mt-0">
-              <SalesTable sales={filteredSales} onMarkAsPaid={markAsPaid} />
+              <SalesTable sales={filteredSales} onMarkAsPaid={markAsPaid} onChangeFulfillmentStatus={changeFulfillmentStatus} />
             </TabsContent>
           </Tabs>
         </div>
@@ -698,12 +717,19 @@ export default function SalesPage() {
   );
 }
 
+const FULFILLMENT_OPTIONS: { value: FulfillmentStatus; label: string; icon: typeof Package; className: string }[] = [
+  { value: "preparing", label: "En preparación", icon: Package, className: "bg-secondary text-secondary-foreground" },
+  { value: "out_for_delivery", label: "En reparto", icon: Truck, className: "bg-info/10 text-info border-info/20" },
+  { value: "delivered", label: "Entregado", icon: PackageCheck, className: "bg-success/10 text-success border-success/20" },
+];
+
 interface SalesTableProps {
   sales: Sale[];
   onMarkAsPaid: (id: string, method: string) => void;
+  onChangeFulfillmentStatus: (id: string, status: FulfillmentStatus) => void;
 }
 
-function SalesTable({ sales, onMarkAsPaid }: SalesTableProps) {
+function SalesTable({ sales, onMarkAsPaid, onChangeFulfillmentStatus }: SalesTableProps) {
   const [paymentDialog, setPaymentDialog] = useState<string | null>(null);
   const [selectedMethod, setSelectedMethod] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -759,17 +785,39 @@ function SalesTable({ sales, onMarkAsPaid }: SalesTableProps) {
                   <div className="text-xs">{sale.time}</div>
                 </td>
                 <td className="py-4 px-4">
-                  {sale.status === "paid" ? (
-                    <Badge className="bg-success/10 text-success border-success/20 gap-1">
-                      <CheckCircle2 className="w-3 h-3" />
-                      Pagado
-                    </Badge>
-                  ) : (
-                    <Badge className="bg-warning/10 text-warning border-warning/20 gap-1">
-                      <AlertCircle className="w-3 h-3" />
-                      Pendiente
-                    </Badge>
-                  )}
+                  <div className="flex flex-col gap-1.5 items-start">
+                    {sale.status === "paid" ? (
+                      <Badge className="bg-success/10 text-success border-success/20 gap-1">
+                        <CheckCircle2 className="w-3 h-3" />
+                        Pagado
+                      </Badge>
+                    ) : (
+                      <Badge className="bg-warning/10 text-warning border-warning/20 gap-1">
+                        <AlertCircle className="w-3 h-3" />
+                        Pendiente
+                      </Badge>
+                    )}
+                    {sale.fulfillmentStatus && (
+                      <Select
+                        value={sale.fulfillmentStatus}
+                        onValueChange={(value) => onChangeFulfillmentStatus(sale.id, value as FulfillmentStatus)}
+                      >
+                        <SelectTrigger className="h-7 w-auto gap-1 text-xs border-none bg-transparent p-0 focus:ring-0">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {FULFILLMENT_OPTIONS.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              <span className="flex items-center gap-1.5">
+                                <opt.icon className="w-3.5 h-3.5" />
+                                {opt.label}
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
                 </td>
                 <td className={cn(
                   "py-4 px-4 text-right font-semibold",

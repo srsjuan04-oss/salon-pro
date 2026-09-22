@@ -929,6 +929,8 @@ export type Database = {
           client_name: string
           created_at: string
           created_by: string | null
+          customer_id: string | null
+          fulfillment_status: string | null
           id: string
           import_id: string | null
           organization_id: string
@@ -945,6 +947,8 @@ export type Database = {
           client_name: string
           created_at?: string
           created_by?: string | null
+          customer_id?: string | null
+          fulfillment_status?: string | null
           id?: string
           import_id?: string | null
           organization_id: string
@@ -961,6 +965,8 @@ export type Database = {
           client_name?: string
           created_at?: string
           created_by?: string | null
+          customer_id?: string | null
+          fulfillment_status?: string | null
           id?: string
           import_id?: string | null
           organization_id?: string
@@ -973,6 +979,13 @@ export type Database = {
           stylist_name?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "sales_entries_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "sales_entries_organization_id_fkey"
             columns: ["organization_id"]
