@@ -27,6 +27,64 @@ const WOMPI_BASE = Deno.env.get("WOMPI_ENV") === "production"
   : "https://sandbox.wompi.co/v1";
 const WOMPI_PRIVATE_KEY = Deno.env.get("WOMPI_PRIVATE_KEY")!;
 const TRIAL_DAYS = 15;
+// retowpp (Chat CharlIA, el módulo de WhatsApp): cada compra crea allá la misma cuenta.
+const RETOWPP_BASE_URL = Deno.env.get("RETOWPP_BASE_URL") ?? "https://chat.charliacrm.com";
+const RETOWPP_PROVISIONING_SECRET = Deno.env.get("RETOWPP_PROVISIONING_SECRET");
+
+/**
+ * Crea en retowpp la empresa y su admin con el MISMO correo y contraseña que el cliente
+ * eligió en /planes, y le deja conectado el MCP de esta organización para el agente de IA.
+ * La contraseña solo pasa por memoria (nunca se loguea ni se guarda). Es best-effort: si
+ * retowpp falla, la compra en SalonPro sigue igual y el resultado queda en
+ * organization_subscriptions.retowpp_status/retowpp_error para reintentar o darla de alta a mano.
+ */
+async function provisionRetowpp(
+  admin: ReturnType<typeof createClient>,
+  params: { orgId: string; email: string; password: string; fullName: string | null },
+): Promise<string> {
+  let status: string;
+  let errorMessage: string | null = null;
+  try {
+    if (!RETOWPP_PROVISIONING_SECRET) {
+      status = "not_configured";
+    } else if (!params.password) {
+      status = "no_password";
+    } else {
+      const { data: org } = await admin
+        .from("organizations")
+        .select("name, mcp_token")
+        .eq("id", params.orgId)
+        .single();
+      const res = await fetch(`${RETOWPP_BASE_URL}/api/integrations/salonpro/provision`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-provisioning-secret": RETOWPP_PROVISIONING_SECRET },
+        body: JSON.stringify({
+          organization_id: params.orgId,
+          email: params.email,
+          password: params.password,
+          company_name: org?.name ?? "Mi Salón",
+          full_name: params.fullName ?? undefined,
+          mcp_url: `${Deno.env.get("SUPABASE_URL")}/functions/v1/mcp-server`,
+          mcp_token: org?.mcp_token ?? undefined,
+        }),
+        signal: AbortSignal.timeout(15_000),
+      });
+      const result = await res.json().catch(() => ({}));
+      status = result?.status ?? (res.ok ? "created" : "error");
+      if (!res.ok) errorMessage = result?.error ?? `HTTP ${res.status}`;
+    }
+  } catch (e) {
+    status = "error";
+    errorMessage = (e as Error).message;
+  }
+
+  if (errorMessage) console.error("[wompi-create-subscription] retowpp:", status, errorMessage);
+  await admin
+    .from("organization_subscriptions")
+    .update({ retowpp_status: status, retowpp_error: errorMessage, retowpp_synced_at: new Date().toISOString() })
+    .eq("organization_id", params.orgId);
+  return status;
+}
 
 async function wompiFetch(path: string, body: unknown) {
   const res = await fetch(`${WOMPI_BASE}${path}`, {
@@ -71,6 +129,7 @@ Deno.serve(async (req) => {
     const acceptanceToken = String(body.acceptance_token ?? "");
     const acceptPersonalAuth = String(body.accept_personal_auth ?? "");
     const customerEmail = String(body.customer_email ?? user.email ?? "");
+    const password = String(body.password ?? "");
 
     if (!["CARD", "NEQUI", "DAVIPLATA", "BANCOLOMBIA_TRANSFER"].includes(paymentType)) {
       return json({ error: `Medio de pago no soportado: ${paymentType}` }, 400);
@@ -120,7 +179,14 @@ Deno.serve(async (req) => {
       }, { onConflict: "organization_id" });
     if (subError) throw new Error(`No se pudo guardar la suscripción: ${subError.message}`);
 
-    return json({ status: "trialing", trial_ends_at: trialEndsAtStr });
+    const retowppStatus = await provisionRetowpp(admin, {
+      orgId,
+      email: user.email ?? customerEmail,
+      password,
+      fullName: (user.user_metadata?.name as string | undefined) ?? null,
+    });
+
+    return json({ status: "trialing", trial_ends_at: trialEndsAtStr, retowpp: retowppStatus });
   } catch (e) {
     console.error("[wompi-create-subscription] ERROR:", (e as Error).message);
     return json({ error: (e as Error).message }, 500);
