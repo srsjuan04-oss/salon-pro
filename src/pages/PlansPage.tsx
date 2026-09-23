@@ -250,6 +250,9 @@ export default function PlansPage() {
           acceptance_token: acceptanceToken,
           accept_personal_auth: personalAuthToken,
           customer_email: email,
+          // Se reenvía para crear la misma cuenta en Chat CharlIA (WhatsApp); el backend
+          // solo la usa en memoria para ese alta y no la guarda.
+          password,
         },
       });
       if (fnError) throw new Error(fnError.message);
