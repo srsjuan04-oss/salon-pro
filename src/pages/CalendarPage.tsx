@@ -108,6 +108,7 @@ export default function CalendarPage() {
     customerId: "",
     newCustomerName: "",
     newCustomerPhone: "",
+    newCustomerEmail: "",
     serviceId: "",
     barberId: "",
     time: "",
@@ -167,6 +168,8 @@ export default function CalendarPage() {
         const newCustomer = await createCustomer.mutateAsync({
           name: formData.newCustomerName,
           phone: formData.newCustomerPhone,
+          // Con correo, la cita le llega como invitación a su Google Calendar (si el salón lo conectó).
+          email: formData.newCustomerEmail.trim() || undefined,
         });
         customerId = newCustomer.id;
       }
@@ -199,6 +202,7 @@ export default function CalendarPage() {
         customerId: "",
         newCustomerName: "",
         newCustomerPhone: "",
+        newCustomerEmail: "",
         serviceId: "",
         barberId: "",
         time: "",
@@ -732,7 +736,7 @@ export default function CalendarPage() {
               <Select
                 value={formData.customerId}
                 onValueChange={(value) =>
-                  setFormData({ ...formData, customerId: value, newCustomerName: "", newCustomerPhone: "" })
+                  setFormData({ ...formData, customerId: value, newCustomerName: "", newCustomerPhone: "", newCustomerEmail: "" })
                 }
               >
                 <SelectTrigger>
@@ -763,6 +767,14 @@ export default function CalendarPage() {
                   value={formData.newCustomerPhone}
                   onChange={(e) =>
                     setFormData({ ...formData, newCustomerPhone: e.target.value })
+                  }
+                />
+                <Input
+                  type="email"
+                  placeholder="Correo (opcional, para invitarlo en Google Calendar)"
+                  value={formData.newCustomerEmail}
+                  onChange={(e) =>
+                    setFormData({ ...formData, newCustomerEmail: e.target.value })
                   }
                 />
               </div>

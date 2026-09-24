@@ -63,6 +63,19 @@ function fuzzyMatch<T extends { id: string; name: string }>(items: T[], value: s
   return best?.item;
 }
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Guarda el correo que el cliente dio por WhatsApp aunque ya existiera (antes solo se guardaba
+// al crearlo): sync-appointment-to-google lo usa para invitarlo al evento de Google Calendar.
+async function saveCustomerEmail(org: string, customerId: string, email: string | undefined) {
+  const clean = email?.trim();
+  if (!clean || !EMAIL_RE.test(clean)) return null;
+  const { error } = await supabase.from("customers").update({ email: clean })
+    .eq("id", customerId).eq("organization_id", org);
+  if (error) console.warn("[saveCustomerEmail] failed:", error.message);
+  return error ? null : clean;
+}
+
 // Pushes an appointment change to the org's connected Google Calendar, same as the
 // admin panel does after create/edit/cancel. Never throws: a broken/disconnected
 // Google integration must never break the WhatsApp booking flow.
@@ -257,7 +270,9 @@ mcp.tool("find_or_create_customer", {
     "apenas tengas el teléfono, ANTES de pedir nombre o correo. Si el cliente ya existe " +
     "(is_new_customer=false), NO le vuelvas a preguntar su nombre — salúdalo por su nombre y, si " +
     "hace falta, solo CONFIRMA sus datos (\"¿sigues siendo Juan, [correo]?\"). Solo pide el nombre " +
-    "si is_new_customer sería true o si la llamada falla pidiendo 'name' (cliente nuevo).",
+    "si is_new_customer sería true o si la llamada falla pidiendo 'name' (cliente nuevo). Si el cliente " +
+    "no tiene correo, pídeselo y pásalo en 'email': con correo, la cita le llega como invitación a su " +
+    "Google Calendar.",
   inputSchema: z.object({
     phone: z.string(),
     name: z.string().optional(),
@@ -270,7 +285,10 @@ mcp.tool("find_or_create_customer", {
     const { data: matches } = await supabase.from("customers").select("*")
       .eq("organization_id", org)
       .or(`phone.ilike.%${tail}%,whatsapp_id.ilike.%${tail}%`).limit(1);
-    if (matches && matches[0]) return ok({ ...matches[0], is_new_customer: false });
+    if (matches && matches[0]) {
+      const savedEmail = await saveCustomerEmail(org, matches[0].id, email);
+      return ok({ ...matches[0], ...(savedEmail ? { email: savedEmail } : {}), is_new_customer: false });
+    }
     if (!name) throw new Error("Cliente nuevo: pídele su nombre y vuelve a llamar a find_or_create_customer con 'name'.");
     const { data, error } = await supabase.from("customers")
       .insert({ phone, name, email, whatsapp_id, organization_id: org }).select().single();
@@ -440,7 +458,10 @@ mcp.tool("get_product_orders", {
 });
 
 mcp.tool("create_appointment", {
-  description: "Crea una cita. Puedes pasar customer_id O customer_phone + customer_name. barber_id/service_id aceptan UUID o nombre.",
+  description:
+    "Crea una cita. Puedes pasar customer_id O customer_phone + customer_name. barber_id/service_id aceptan UUID o nombre. " +
+    "Pasa customer_email si el cliente te dio su correo (también si ya existía): con correo, la cita le llega " +
+    "como invitación a su Google Calendar.",
   inputSchema: z.object({
     customer_id: z.string().optional(),
     customer_phone: z.string().optional(),
@@ -475,6 +496,9 @@ mcp.tool("create_appointment", {
           customerId = created.id;
         }
       }
+      // Cliente existente (por id o por teléfono): se le guarda el correo que acaba de dar, para
+      // que la invitación de Google Calendar le llegue en esta misma cita.
+      await saveCustomerEmail(org, customerId!, args.customer_email);
       const todayBogota = new Date(Date.now() - 5 * 3600 * 1000).toISOString().slice(0, 10);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(args.appointment_date))
         throw new Error("appointment_date debe tener formato YYYY-MM-DD.");
