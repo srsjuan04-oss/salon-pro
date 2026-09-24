@@ -10,6 +10,17 @@ import { Badge } from "@/components/ui/badge";
 import { CheckCircle2, AlertCircle, RefreshCw, Save, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 
+/** Mensaje real que devolvió whapify-proxy: ante un status no-2xx, supabase-js solo expone
+ * "Edge Function returned a non-2xx status code" y el cuerpo queda en `error.context`. */
+async function functionErrorMessage(error: unknown, fallback: string): Promise<string> {
+  const context = (error as { context?: Response } | null)?.context;
+  if (context && typeof context.json === "function") {
+    const body = await context.json().catch(() => null);
+    if (body?.error && typeof body.error === "string") return body.error;
+  }
+  return fallback;
+}
+
 function maskToken(t: string | null | undefined) {
   if (!t) return "";
   const tail = t.slice(-4);
@@ -87,7 +98,9 @@ export function WhapifySettingsCard() {
   const { data: settings } = useQuery({
     queryKey: ["whapify-settings"],
     queryFn: async () => {
-      const { data } = await supabase.from("whapify_settings").select("*").eq("singleton", true).maybeSingle();
+      // Una fila por organización; la RLS ("org read") ya limita a la del usuario.
+      const { data, error } = await supabase.from("whapify_settings").select("*").maybeSingle();
+      if (error) throw error;
       return data;
     },
   });
@@ -113,16 +126,21 @@ export function WhapifySettingsCard() {
       const { data, error } = await supabase.functions.invoke("whapify-proxy", {
         body: { action: "save_token", token: tokenInput.trim() },
       });
-      if (error) throw error;
+      // Token rechazado por Gestor de WhatsApp: la función responde 400 con success=false.
+      if (error && (error as { context?: Response }).context?.status === 400) {
+        const body = await (error as { context: Response }).context.json().catch(() => null);
+        if (body && body.success === false) return body;
+      }
+      if (error) throw new Error(await functionErrorMessage(error, "No se pudo guardar el token."));
       return data;
     },
     onSuccess: (d: any) => {
+      qc.invalidateQueries({ queryKey: ["whapify-settings"] });
       if (d?.success) {
         toast.success(`Token guardado. ${d.flows_count} flows disponibles.`);
         setTokenInput("");
-        qc.invalidateQueries({ queryKey: ["whapify-settings"] });
       } else {
-        toast.error("Token inválido");
+        toast.error("Gestor de WhatsApp rechazó el token. Revisa que lo copiaste completo desde tu cuenta.");
       }
     },
     onError: (e: any) => toast.error(e.message),
@@ -131,19 +149,20 @@ export function WhapifySettingsCard() {
   const validate = useMutation({
     mutationFn: async () => {
       const { data, error } = await supabase.functions.invoke("whapify-proxy", { body: { action: "validate" } });
-      if (error) throw error;
+      if (error) throw new Error(await functionErrorMessage(error, "No se pudo validar la conexión."));
       return data;
     },
     onSuccess: (d: any) => {
       toast[d?.valid ? "success" : "error"](d?.valid ? "Conexión válida ✓" : "Token inválido");
       qc.invalidateQueries({ queryKey: ["whapify-settings"] });
     },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const syncFlows = useMutation({
     mutationFn: async () => {
       const { data, error } = await supabase.functions.invoke("whapify-proxy", { body: { action: "sync_flows" } });
-      if (error) throw error;
+      if (error) throw new Error(await functionErrorMessage(error, "No se pudieron consultar los flows."));
       return data;
     },
     onSuccess: (d: any) => {
@@ -236,7 +255,8 @@ export function WhapifySettingsCard() {
 
         {!isActive && (
           <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-sm">
-            Conecta Gestor de WhatsApp primero para poder seleccionar flows.
+            Para usar un Flow de Gestor de WhatsApp, primero conecta un token válido arriba. Si envías los
+            recordatorios por Chat CharlIA (webhook), no necesitas Gestor de WhatsApp.
           </div>
         )}
 
