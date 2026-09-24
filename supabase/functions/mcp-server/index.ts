@@ -38,6 +38,22 @@ const mcp = new McpServer({
     : { type: "object" },
 });
 
+// mcp-lite convierte cualquier excepción de una herramienta en un JSON-RPC "Internal error" sin
+// el mensaje, así que el agente nunca sabía por qué falló (choque de horario, cliente nuevo al
+// que hay que pedirle el nombre…). Se devuelve como resultado con isError para que lo lea.
+const registerTool = mcp.tool.bind(mcp);
+mcp.tool = (name: string, def: any) =>
+  registerTool(name, {
+    ...def,
+    handler: async (...handlerArgs: unknown[]) => {
+      try {
+        return await def.handler(...handlerArgs);
+      } catch (e) {
+        return { content: [{ type: "text", text: (e as Error).message }], isError: true };
+      }
+    },
+  });
+
 const ok = (data: unknown) => ({ content: [{ type: "text", text: JSON.stringify(data) }] });
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -64,6 +80,40 @@ function fuzzyMatch<T extends { id: string; name: string }>(items: T[], value: s
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// BSUID: lo que manda WhatsApp en vez del número cuando el cliente escribe con nombre de
+// usuario sin compartir su teléfono, ej. "CO.2278535082987351". No es un teléfono: no sirve
+// para enviarle recordatorios ni se puede comparar por sus últimos dígitos.
+const BSUID_RE = /^[A-Za-z]{2}\.[A-Za-z0-9]+$/;
+const BSUID_NEEDS_PHONE =
+  "Este cliente escribe con nombre de usuario de WhatsApp y no comparte su número: pídele su número de " +
+  "celular y vuelve a llamar con ese número en el teléfono y este identificador en whatsapp_id.";
+
+/** Filtro para encontrar un cliente por teléfono (comparando los últimos 10 dígitos) o por su
+ * BSUID (exacto, contra whatsapp_id o phone de registros viejos que lo guardaron ahí). */
+function customerMatchFilter(value: string): string {
+  const v = value.trim();
+  if (BSUID_RE.test(v)) return `whatsapp_id.eq.${v},phone.eq.${v}`;
+  const tail = v.replace(/\D/g, "").slice(-10);
+  // Sin dígitos suficientes, un ilike '%%' encontraría a cualquier cliente de la organización.
+  if (tail.length < 7) throw new Error(`"${v}" no es un teléfono válido: pídele al cliente su número de celular.`);
+  return `phone.ilike.%${tail}%,whatsapp_id.ilike.%${tail}%`;
+}
+
+/** Nunca se crea un cliente con el BSUID como teléfono: los recordatorios irían a un número inexistente. */
+function assertRealPhone(phone: string) {
+  if (BSUID_RE.test(phone.trim())) throw new Error(BSUID_NEEDS_PHONE);
+}
+
+/** Guarda el BSUID en un cliente que ya existía, para reconocerlo la próxima vez que escriba
+ * con su nombre de usuario sin tener que volver a pedirle el número. */
+async function linkWhatsappId(org: string, customerId: string, whatsappId: string | undefined) {
+  const clean = whatsappId?.trim();
+  if (!clean || !BSUID_RE.test(clean)) return;
+  const { error } = await supabase.from("customers").update({ whatsapp_id: clean })
+    .eq("id", customerId).eq("organization_id", org);
+  if (error) console.error("[linkWhatsappId]", error.message);
+}
 
 // Guarda el correo que el cliente dio por WhatsApp aunque ya existiera (antes solo se guardaba
 // al crearlo): sync-appointment-to-google lo usa para invitarlo al evento de Google Calendar.
@@ -266,7 +316,9 @@ mcp.tool("get_availability", {
 
 mcp.tool("find_or_create_customer", {
   description:
-    "Busca un cliente por teléfono, o lo crea si no existe. IMPORTANTE: llama esta herramienta " +
+    "Busca un cliente por teléfono (o por su identificador de usuario de WhatsApp, ej. \"CO.2278…\"), o lo " +
+    "crea si no existe. Si el cliente escribe con nombre de usuario y no tiene número registrado, pídele su " +
+    "celular y llama con phone=<celular> y whatsapp_id=<identificador>. IMPORTANTE: llama esta herramienta " +
     "apenas tengas el teléfono, ANTES de pedir nombre o correo. Si el cliente ya existe " +
     "(is_new_customer=false), NO le vuelvas a preguntar su nombre — salúdalo por su nombre y, si " +
     "hace falta, solo CONFIRMA sus datos (\"¿sigues siendo Juan, [correo]?\"). Solo pide el nombre " +
@@ -281,14 +333,23 @@ mcp.tool("find_or_create_customer", {
   }),
   handler: async ({ phone, name, email, whatsapp_id }) => {
     const org = requireOrg();
-    const tail = phone.replace(/\D/g, "").slice(-10);
+    // Con teléfono real + BSUID, también se busca por el BSUID: así un cliente que antes quedó
+    // registrado solo con su nombre de usuario recibe su número en vez de duplicarse.
+    const wid = whatsapp_id?.trim();
+    const byWhatsappId = wid && BSUID_RE.test(wid) ? `,whatsapp_id.eq.${wid},phone.eq.${wid}` : "";
     const { data: matches } = await supabase.from("customers").select("*")
       .eq("organization_id", org)
-      .or(`phone.ilike.%${tail}%,whatsapp_id.ilike.%${tail}%`).limit(1);
+      .or(customerMatchFilter(phone) + byWhatsappId).limit(1);
     if (matches && matches[0]) {
       const savedEmail = await saveCustomerEmail(org, matches[0].id, email);
+      await linkWhatsappId(org, matches[0].id, whatsapp_id);
+      if (BSUID_RE.test(matches[0].phone ?? "") && !BSUID_RE.test(phone.trim())) {
+        await supabase.from("customers").update({ phone: phone.trim() }).eq("id", matches[0].id).eq("organization_id", org);
+        matches[0].phone = phone.trim();
+      }
       return ok({ ...matches[0], ...(savedEmail ? { email: savedEmail } : {}), is_new_customer: false });
     }
+    assertRealPhone(phone);
     if (!name) throw new Error("Cliente nuevo: pídele su nombre y vuelve a llamar a find_or_create_customer con 'name'.");
     const { data, error } = await supabase.from("customers")
       .insert({ phone, name, email, whatsapp_id, organization_id: org }).select().single();
@@ -332,15 +393,15 @@ mcp.tool("request_product", {
     let customerName = args.customer_name;
     if (!customerId) {
       if (!args.customer_phone) throw new Error("Falta customer_id o customer_phone.");
-      const tail = args.customer_phone.replace(/\D/g, "").slice(-10);
       const { data: matches } = await supabase.from("customers").select("id, name")
         .eq("organization_id", org)
-        .or(`phone.ilike.%${tail}%,whatsapp_id.ilike.%${tail}%`).limit(1);
+        .or(customerMatchFilter(args.customer_phone)).limit(1);
       const existing = matches?.[0];
       if (existing) {
         customerId = existing.id;
         customerName = existing.name;
       } else {
+        assertRealPhone(args.customer_phone);
         if (!args.customer_name) throw new Error("Cliente nuevo: se requiere customer_name.");
         const { data: created, error: ce } = await supabase.from("customers").insert({
           phone: args.customer_phone, name: args.customer_name, organization_id: org,
@@ -437,10 +498,9 @@ mcp.tool("get_product_orders", {
     const org = requireOrg();
     let cid = customer_id;
     if (!cid && phone) {
-      const tail = phone.replace(/\D/g, "").slice(-10);
       const { data: cust } = await supabase.from("customers").select("id")
         .eq("organization_id", org)
-        .or(`phone.ilike.%${tail}%,whatsapp_id.ilike.%${tail}%`).limit(1).maybeSingle();
+        .or(customerMatchFilter(phone)).limit(1).maybeSingle();
       cid = cust?.id;
     }
     if (!cid) return ok([]);
@@ -461,12 +521,14 @@ mcp.tool("create_appointment", {
   description:
     "Crea una cita. Puedes pasar customer_id O customer_phone + customer_name. barber_id/service_id aceptan UUID o nombre. " +
     "Pasa customer_email si el cliente te dio su correo (también si ya existía): con correo, la cita le llega " +
-    "como invitación a su Google Calendar.",
+    "como invitación a su Google Calendar. Si el cliente escribe con nombre de usuario de WhatsApp (sin " +
+    "número), pasa su número de celular real en customer_phone y su identificador en customer_whatsapp_id.",
   inputSchema: z.object({
     customer_id: z.string().optional(),
     customer_phone: z.string().optional(),
     customer_name: z.string().optional(),
     customer_email: z.string().optional(),
+    customer_whatsapp_id: z.string().optional(),
     barber_id: z.string(),
     service_id: z.string(),
     appointment_date: z.string(),
@@ -480,17 +542,17 @@ mcp.tool("create_appointment", {
       let customerId = args.customer_id;
       if (!customerId) {
         if (!args.customer_phone) throw new Error("Falta customer_id o customer_phone.");
-        const tail = args.customer_phone.replace(/\D/g, "").slice(-10);
         const { data: matches } = await supabase.from("customers").select("id")
           .eq("organization_id", org)
-          .or(`phone.ilike.%${tail}%,whatsapp_id.ilike.%${tail}%`).limit(1);
+          .or(customerMatchFilter(args.customer_phone)).limit(1);
         const existing = matches?.[0];
         if (existing) customerId = existing.id;
         else {
+          assertRealPhone(args.customer_phone);
           if (!args.customer_name) throw new Error("Cliente nuevo: se requiere customer_name.");
           const { data: created, error: ce } = await supabase.from("customers").insert({
             phone: args.customer_phone, name: args.customer_name,
-            email: args.customer_email, organization_id: org,
+            email: args.customer_email, whatsapp_id: args.customer_whatsapp_id?.trim() || null, organization_id: org,
           }).select("id").single();
           if (ce) throw new Error(`No se pudo crear el cliente: ${ce.message}`);
           customerId = created.id;
@@ -499,6 +561,7 @@ mcp.tool("create_appointment", {
       // Cliente existente (por id o por teléfono): se le guarda el correo que acaba de dar, para
       // que la invitación de Google Calendar le llegue en esta misma cita.
       await saveCustomerEmail(org, customerId!, args.customer_email);
+      await linkWhatsappId(org, customerId!, args.customer_whatsapp_id);
       const todayBogota = new Date(Date.now() - 5 * 3600 * 1000).toISOString().slice(0, 10);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(args.appointment_date))
         throw new Error("appointment_date debe tener formato YYYY-MM-DD.");
@@ -573,10 +636,9 @@ mcp.tool("reschedule_appointment", {
     let apptId = args.appointment_id;
     if (!apptId) {
       if (!args.phone || !args.original_date) throw new Error("Envía appointment_id, o phone + original_date.");
-      const tail = args.phone.replace(/\D/g, "").slice(-10);
       const { data: cust } = await supabase.from("customers").select("id")
         .eq("organization_id", org)
-        .or(`phone.ilike.%${tail}%,whatsapp_id.ilike.%${tail}%`).limit(1).maybeSingle();
+        .or(customerMatchFilter(args.phone)).limit(1).maybeSingle();
       if (!cust) throw new Error(`Cliente no encontrado para ${args.phone}`);
       const { data: found } = await supabase.from("appointments").select("id")
         .eq("customer_id", cust.id).eq("organization_id", org)
@@ -668,10 +730,9 @@ mcp.tool("log_customer_note", {
     const org = requireOrg();
     let cid = customer_id;
     if (!cid && phone) {
-      const tail = phone.replace(/\D/g, "").slice(-10);
       const { data: cust } = await supabase.from("customers").select("id")
         .eq("organization_id", org)
-        .or(`phone.ilike.%${tail}%,whatsapp_id.ilike.%${tail}%`).limit(1).maybeSingle();
+        .or(customerMatchFilter(phone)).limit(1).maybeSingle();
       cid = cust?.id;
     }
     if (!cid) throw new Error("Cliente no encontrado: envía customer_id o phone válido.");
@@ -695,10 +756,9 @@ mcp.tool("list_customer_notes", {
     const org = requireOrg();
     let cid = customer_id;
     if (!cid && phone) {
-      const tail = phone.replace(/\D/g, "").slice(-10);
       const { data: cust } = await supabase.from("customers").select("id")
         .eq("organization_id", org)
-        .or(`phone.ilike.%${tail}%,whatsapp_id.ilike.%${tail}%`).limit(1).maybeSingle();
+        .or(customerMatchFilter(phone)).limit(1).maybeSingle();
       cid = cust?.id;
     }
     if (!cid) return ok([]);
@@ -722,10 +782,9 @@ mcp.tool("list_customer_appointments", {
     const org = requireOrg();
     let cid = customer_id;
     if (!cid && phone) {
-      const tail = phone.replace(/\D/g, "").slice(-10);
       const { data: matches } = await supabase.from("customers").select("id, phone")
         .eq("organization_id", org)
-        .or(`phone.ilike.%${tail}%,whatsapp_id.ilike.%${tail}%`);
+        .or(customerMatchFilter(phone));
       const c = matches?.[0];
       if (!c) return ok([]);
       cid = c.id;

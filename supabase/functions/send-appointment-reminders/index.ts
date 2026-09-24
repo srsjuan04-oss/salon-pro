@@ -157,6 +157,16 @@ Deno.serve(async (req) => {
         failed++;
         continue;
       }
+      // BSUID ("CO.2278…"): el cliente escribió con nombre de usuario de WhatsApp y nunca se le
+      // pidió el número; sus dígitos no son un teléfono y el mensaje iría a un número inexistente.
+      if (/^[A-Za-z]{2}\.[A-Za-z0-9]+$/.test(rem.customer_phone.trim())) {
+        await supabase.from("appointment_reminders").update({
+          status: "failed",
+          error_message: "El cliente escribe con nombre de usuario de WhatsApp y no tiene número de celular registrado",
+        }).eq("id", rem.id);
+        failed++;
+        continue;
+      }
 
       // Chat CharlIA (Meta Cloud API con plantillas aprobadas) tiene prioridad si está
       // configurado; si no, se cae al camino viejo de Whapify/Chatrace.
