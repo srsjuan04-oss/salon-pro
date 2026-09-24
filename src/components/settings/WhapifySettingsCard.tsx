@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, AlertCircle, RefreshCw, Save, MessageSquare } from "lucide-react";
+import { CheckCircle2, AlertCircle, RefreshCw, Save, MessageSquare, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 /** Mensaje real que devolvió whapify-proxy: ante un status no-2xx, supabase-js solo expone
@@ -19,6 +19,16 @@ async function functionErrorMessage(error: unknown, fallback: string): Promise<s
     if (body?.error && typeof body.error === "string") return body.error;
   }
   return fallback;
+}
+
+const REMINDER_UNITS = { minutes: 1, hours: 60, days: 1440 } as const;
+type ReminderUnit = keyof typeof REMINDER_UNITS;
+
+/** "1 día", "3 horas", "90 minutos": la unidad más grande que divida exacto. */
+function formatReminderOffset(minutes: number) {
+  if (minutes % 1440 === 0) return `${minutes / 1440} día${minutes / 1440 > 1 ? "s" : ""}`;
+  if (minutes % 60 === 0) return `${minutes / 60} hora${minutes / 60 > 1 ? "s" : ""}`;
+  return `${minutes} minuto${minutes > 1 ? "s" : ""}`;
 }
 
 function maskToken(t: string | null | undefined) {
@@ -94,6 +104,8 @@ export function WhapifySettingsCard() {
   const qc = useQueryClient();
   const [tokenInput, setTokenInput] = useState("");
   const [webhookDrafts, setWebhookDrafts] = useState<Record<string, string>>({});
+  const [newAmount, setNewAmount] = useState("24");
+  const [newUnit, setNewUnit] = useState<ReminderUnit>("hours");
 
   const { data: settings } = useQuery({
     queryKey: ["whapify-settings"],
@@ -182,6 +194,40 @@ export function WhapifySettingsCard() {
     onError: (e: any) => toast.error(e.message),
   });
 
+  const createReminder = useMutation({
+    mutationFn: async () => {
+      const minutes = Math.round(Number(newAmount) * REMINDER_UNITS[newUnit]);
+      if (!Number.isFinite(minutes) || minutes < 1 || minutes > 43200) {
+        throw new Error("Elige un tiempo entre 1 minuto y 30 días.");
+      }
+      if (reminders.some((r) => r.minutes_before === minutes)) {
+        throw new Error(`Ya tienes un recordatorio ${formatReminderOffset(minutes)} antes.`);
+      }
+      // organization_id lo pone el trigger set_org_id. Queda inactivo hasta que se le
+      // asigne un destino (webhook o flow), igual que los recordatorios por defecto.
+      const { error } = await supabase
+        .from("reminder_settings")
+        .insert({ reminder_type: `${minutes}_min`, minutes_before: minutes, active: false } as any);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Recordatorio creado. Asígnale un destino y actívalo.");
+      qc.invalidateQueries({ queryKey: ["reminder-settings"] });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const deleteReminder = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("reminder_settings").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Recordatorio eliminado");
+      qc.invalidateQueries({ queryKey: ["reminder-settings"] });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
 
   const hasToken = Boolean(settings?.whapify_token);
   const isActive = Boolean(settings?.is_active);
@@ -268,11 +314,9 @@ export function WhapifySettingsCard() {
               <div key={r.id} className="p-4 rounded-xl border bg-secondary/30 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium">
-                      {r.minutes_before >= 60 ? `${r.minutes_before / 60} hora${r.minutes_before / 60 > 1 ? "s" : ""}` : `${r.minutes_before} minutos`} antes
-                    </p>
+                    <p className="font-medium">{formatReminderOffset(r.minutes_before)} antes de la cita</p>
                     <p className="text-xs text-muted-foreground">
-                      Canal: {r.webhook_url ? "Chat CharlIA" : "Gestor de WhatsApp"} · Tipo: {r.reminder_type}
+                      Canal: {r.webhook_url ? "Chat CharlIA" : "Gestor de WhatsApp"}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -286,6 +330,19 @@ export function WhapifySettingsCard() {
                       disabled={!configured}
                       onCheckedChange={(v) => updateReminder.mutate({ id: r.id, patch: { active: v } })}
                     />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Eliminar recordatorio"
+                      disabled={deleteReminder.isPending}
+                      onClick={() => {
+                        if (window.confirm(`¿Eliminar el recordatorio de ${formatReminderOffset(r.minutes_before)} antes?`)) {
+                          deleteReminder.mutate(r.id);
+                        }
+                      }}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
                   </div>
                 </div>
 
@@ -334,6 +391,37 @@ export function WhapifySettingsCard() {
               </div>
             );
           })}
+        </div>
+
+        <div className="p-4 rounded-xl border border-dashed space-y-2">
+          <Label className="text-xs">Nuevo recordatorio</Label>
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              type="number"
+              min={1}
+              className="w-24"
+              value={newAmount}
+              onChange={(e) => setNewAmount(e.target.value)}
+            />
+            <Select value={newUnit} onValueChange={(v) => setNewUnit(v as ReminderUnit)}>
+              <SelectTrigger className="w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="minutes">minutos</SelectItem>
+                <SelectItem value="hours">horas</SelectItem>
+                <SelectItem value="days">días</SelectItem>
+              </SelectContent>
+            </Select>
+            <span className="text-sm text-muted-foreground">antes de la cita</span>
+            <Button
+              onClick={() => createReminder.mutate()}
+              disabled={!newAmount || createReminder.isPending}
+              className="gap-2"
+            >
+              <Plus className="w-4 h-4" /> Agregar
+            </Button>
+          </div>
         </div>
       </div>
     </div>
