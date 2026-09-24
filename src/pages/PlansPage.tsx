@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   AlertCircle,
   CheckCircle2,
@@ -26,6 +27,30 @@ const emailSchema = z.string().email("Email inválido");
 const passwordSchema = z.string().min(6, "La contraseña debe tener al menos 6 caracteres");
 const nameSchema = z.string().min(2, "Este campo es obligatorio");
 const COL_PHONE_RE = /^3\d{9}$/;
+
+// Países para el WhatsApp de contacto. `digits` es la cantidad de dígitos del número
+// nacional sin el prefijo (rango, porque en varios países varía).
+const PHONE_COUNTRIES = [
+  { code: "CO", name: "Colombia", flag: "🇨🇴", dial: "57", digits: [10, 10] },
+  { code: "MX", name: "México", flag: "🇲🇽", dial: "52", digits: [10, 10] },
+  { code: "EC", name: "Ecuador", flag: "🇪🇨", dial: "593", digits: [9, 9] },
+  { code: "PE", name: "Perú", flag: "🇵🇪", dial: "51", digits: [9, 9] },
+  { code: "VE", name: "Venezuela", flag: "🇻🇪", dial: "58", digits: [10, 10] },
+  { code: "PA", name: "Panamá", flag: "🇵🇦", dial: "507", digits: [8, 8] },
+  { code: "CR", name: "Costa Rica", flag: "🇨🇷", dial: "506", digits: [8, 8] },
+  { code: "GT", name: "Guatemala", flag: "🇬🇹", dial: "502", digits: [8, 8] },
+  { code: "SV", name: "El Salvador", flag: "🇸🇻", dial: "503", digits: [8, 8] },
+  { code: "HN", name: "Honduras", flag: "🇭🇳", dial: "504", digits: [8, 8] },
+  { code: "DO", name: "República Dominicana", flag: "🇩🇴", dial: "1", digits: [10, 10] },
+  { code: "CL", name: "Chile", flag: "🇨🇱", dial: "56", digits: [9, 9] },
+  { code: "AR", name: "Argentina", flag: "🇦🇷", dial: "54", digits: [10, 11] },
+  { code: "BO", name: "Bolivia", flag: "🇧🇴", dial: "591", digits: [8, 8] },
+  { code: "PY", name: "Paraguay", flag: "🇵🇾", dial: "595", digits: [9, 9] },
+  { code: "UY", name: "Uruguay", flag: "🇺🇾", dial: "598", digits: [8, 9] },
+  { code: "US", name: "Estados Unidos", flag: "🇺🇸", dial: "1", digits: [10, 10] },
+  { code: "ES", name: "España", flag: "🇪🇸", dial: "34", digits: [9, 9] },
+] as const;
+type PhoneCountryCode = (typeof PHONE_COUNTRIES)[number]["code"];
 
 const WOMPI_ENV = import.meta.env.VITE_WOMPI_ENV;
 const IS_SANDBOX = WOMPI_ENV !== "production";
@@ -88,6 +113,10 @@ export default function PlansPage() {
   const [adminName, setAdminName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [phoneCountry, setPhoneCountry] = useState<PhoneCountryCode>("CO");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const phoneCountryInfo = PHONE_COUNTRIES.find((c) => c.code === phoneCountry)!;
+  const phoneDigits = phoneNumber.replace(/\D/g, "");
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentType>("CARD");
 
@@ -164,7 +193,7 @@ export default function PlansPage() {
   };
 
   const canSubmit = (() => {
-    if (!selectedPlan || !salonName || !adminName || !email || !password) return false;
+    if (!selectedPlan || !salonName || !adminName || !email || !password || !phoneDigits) return false;
     if (paymentMethod === "CARD") return Boolean(cardNumber && cardCvc && cardExpMonth && cardExpYear && cardHolder);
     if (paymentMethod === "NEQUI") return Boolean(nequiTokenId);
     return Boolean(bcolTokenId);
@@ -189,6 +218,18 @@ export default function PlansPage() {
     } catch (err) {
       if (err instanceof z.ZodError) return setError(err.errors[0].message);
     }
+    const [minDigits, maxDigits] = phoneCountryInfo.digits;
+    if (phoneDigits.length < minDigits || phoneDigits.length > maxDigits) {
+      return setError(
+        minDigits === maxDigits
+          ? `El WhatsApp de ${phoneCountryInfo.name} debe tener ${minDigits} dígitos (sin el +${phoneCountryInfo.dial}).`
+          : `El WhatsApp de ${phoneCountryInfo.name} debe tener entre ${minDigits} y ${maxDigits} dígitos (sin el +${phoneCountryInfo.dial}).`
+      );
+    }
+    if (phoneCountry === "CO" && !COL_PHONE_RE.test(phoneDigits)) {
+      return setError("El celular de Colombia debe empezar por 3 y tener 10 dígitos.");
+    }
+    const contactPhone = `+${phoneCountryInfo.dial}${phoneDigits}`;
     if (paymentMethod === "CARD" && (!cardNumber || !cardCvc || !cardExpMonth || !cardExpYear || !cardHolder)) {
       return setError("Completa los datos de la tarjeta.");
     }
@@ -201,7 +242,7 @@ export default function PlansPage() {
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { name: adminName, salon_name: salonName } },
+        options: { data: { name: adminName, salon_name: salonName, contact_phone: contactPhone } },
       });
       if (signUpError) {
         if (!signUpError.message.includes("already registered")) throw new Error(signUpError.message);
@@ -411,6 +452,36 @@ export default function PlansPage() {
                     <Label htmlFor="plan-password">Contraseña</Label>
                     <Input id="plan-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
                   </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label htmlFor="plan-phone">WhatsApp de contacto</Label>
+                    <div className="flex gap-2">
+                      <Select value={phoneCountry} onValueChange={(v) => setPhoneCountry(v as PhoneCountryCode)}>
+                        <SelectTrigger className="w-[150px] shrink-0" aria-label="País">
+                          <SelectValue>
+                            {phoneCountryInfo.flag} +{phoneCountryInfo.dial}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {PHONE_COUNTRIES.map((c) => (
+                            <SelectItem key={c.code} value={c.code}>
+                              {c.flag} {c.name} (+{c.dial})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        id="plan-phone"
+                        type="tel"
+                        inputMode="numeric"
+                        autoComplete="tel-national"
+                        placeholder={phoneCountry === "CO" ? "3001234567" : "Número sin el prefijo"}
+                        value={phoneNumber}
+                        onChange={(e) => setPhoneNumber(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">Primero elige el país; escribe el número sin el prefijo.</p>
+                  </div>
                 </div>
 
                 <div className="border-t pt-4 space-y-4">
@@ -461,15 +532,22 @@ export default function PlansPage() {
                       <div className="flex gap-2 items-end">
                         <div className="space-y-2 flex-1">
                           <Label htmlFor="nequi-phone">Número de Nequi</Label>
-                          <Input
-                            id="nequi-phone"
-                            inputMode="numeric"
-                            maxLength={10}
-                            placeholder="3001234567"
-                            value={nequiPhone}
-                            onChange={(e) => { setNequiPhone(e.target.value); setNequiTokenId(null); setNequiStatus("idle"); }}
-                            disabled={nequiStatus === "verifying"}
-                          />
+                          <div className="flex">
+                            {/* Nequi solo existe en Colombia: el prefijo es fijo. */}
+                            <span className="inline-flex items-center whitespace-nowrap rounded-l-md border border-r-0 border-input bg-muted px-3 text-sm text-muted-foreground">
+                              🇨🇴 +57
+                            </span>
+                            <Input
+                              id="nequi-phone"
+                              className="rounded-l-none"
+                              inputMode="numeric"
+                              maxLength={10}
+                              placeholder="3001234567"
+                              value={nequiPhone}
+                              onChange={(e) => { setNequiPhone(e.target.value); setNequiTokenId(null); setNequiStatus("idle"); }}
+                              disabled={nequiStatus === "verifying"}
+                            />
+                          </div>
                         </div>
                         <Button type="button" variant="outline" onClick={handleVerifyNequi} disabled={nequiStatus === "verifying" || nequiStatus === "approved"}>
                           {nequiStatus === "verifying" && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
