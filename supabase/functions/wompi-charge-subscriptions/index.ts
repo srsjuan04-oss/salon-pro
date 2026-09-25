@@ -48,6 +48,13 @@ async function sha256Hex(input: string): Promise<string> {
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+/** Motivo del error de Wompi, con el detalle por campo de INPUT_VALIDATION_ERROR y sin la llave privada. */
+function wompiErrorMessage(body: any, fallback: string): string {
+  const error = body?.error;
+  const details = error?.messages ? ` ${JSON.stringify(error.messages)}` : "";
+  return `${error?.reason ?? error?.type ?? fallback}${details}`.replace(/prv_(prod|test)_\w+/g, "[llave privada]");
+}
+
 async function chargeWompi(payload: Record<string, unknown>) {
   const res = await fetch(`${WOMPI_BASE}/transactions`, {
     method: "POST",
@@ -58,9 +65,7 @@ async function chargeWompi(payload: Record<string, unknown>) {
     body: JSON.stringify(payload),
   });
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(body?.error?.reason ?? body?.error?.type ?? res.statusText);
-  }
+  if (!res.ok) throw new Error(wompiErrorMessage(body, res.statusText));
   return body.data;
 }
 
@@ -69,9 +74,7 @@ async function getWompiTransaction(id: string) {
     headers: { Authorization: `Bearer ${WOMPI_PRIVATE_KEY}` },
   });
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(body?.error?.reason ?? body?.error?.type ?? res.statusText);
-  }
+  if (!res.ok) throw new Error(wompiErrorMessage(body, res.statusText));
   return body.data;
 }
 
