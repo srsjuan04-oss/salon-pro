@@ -97,7 +97,9 @@ async function wompiFetch(path: string, body: unknown) {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const reason = data?.error?.reason ?? data?.error?.type ?? res.statusText;
+    // Wompi repite la llave recibida en algunos errores: nunca devolverla al navegador.
+    const reason = String(data?.error?.reason ?? data?.error?.type ?? res.statusText)
+      .replace(/prv_(prod|test)_\w+/g, "[llave privada]");
     throw new Error(`Wompi ${path} falló: ${reason}`);
   }
   return data.data;
