@@ -30,9 +30,16 @@ async function wompiPublicFetch(path: string, body: unknown) {
   return json.data;
 }
 
-/** Consulta un token de Nequi/Bancolombia hasta que quede APPROVED, DECLINED o ERROR. */
-async function pollWompiToken(path: string, id: string, maxAttempts = 40, intervalMs = 3000) {
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+class TokenWaitTimeoutError extends Error {}
+
+/**
+ * Consulta un token de Nequi/Bancolombia hasta que quede APPROVED, DECLINED o ERROR.
+ * El límite es por tiempo real y no por intentos: en el celular el navegador pausa
+ * los timers mientras el cliente está en la app de Nequi aprobando.
+ */
+async function pollWompiToken(path: string, id: string, maxWaitMs = 5 * 60_000, intervalMs = 3000) {
+  const deadline = Date.now() + maxWaitMs;
+  while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, intervalMs));
     const res = await fetch(`${WOMPI_BASE}${path}/${id}`, {
       headers: { Authorization: `Bearer ${WOMPI_PUBLIC_KEY}` },
@@ -43,7 +50,9 @@ async function pollWompiToken(path: string, id: string, maxAttempts = 40, interv
     if (status === "DECLINED") throw new Error("El medio de pago fue rechazado.");
     if (status === "ERROR") throw new Error("No se pudo validar el medio de pago.");
   }
-  throw new Error("Se agotó el tiempo de espera esperando la aprobación. Intenta de nuevo.");
+  throw new TokenWaitTimeoutError(
+    "Todavía no vemos la aprobación. Si ya aprobaste, toca \"Ya aprobé, revisar de nuevo\"."
+  );
 }
 
 export interface TokenizedPaymentMethod {
@@ -72,11 +81,15 @@ export function useWompiPaymentMethod(redirectPath: string) {
   const [nequiStatus, setNequiStatus] = useState<AsyncMethodStatus>("idle");
   const [nequiError, setNequiError] = useState<string | null>(null);
   const [nequiTokenId, setNequiTokenId] = useState<string | null>(null);
+  // Token creado pero sin aprobación vista aún: se puede volver a revisar sin
+  // mandarle al cliente otra solicitud a su app.
+  const [nequiPendingId, setNequiPendingId] = useState<string | null>(null);
 
   // Bancolombia: autorización en ventana emergente.
   const [bcolStatus, setBcolStatus] = useState<AsyncMethodStatus>("idle");
   const [bcolError, setBcolError] = useState<string | null>(null);
   const [bcolTokenId, setBcolTokenId] = useState<string | null>(null);
+  const [bcolPendingId, setBcolPendingId] = useState<string | null>(null);
 
   const handleVerifyNequi = async () => {
     setNequiError(null);
@@ -86,30 +99,48 @@ export function useWompiPaymentMethod(redirectPath: string) {
     }
     setNequiStatus("verifying");
     try {
-      const created = await wompiPublicFetch("/tokens/nequi", { phone_number: nequiPhone });
-      const approved = await pollWompiToken("/tokens/nequi", created.id);
+      const pendingId = nequiPendingId ?? (await wompiPublicFetch("/tokens/nequi", { phone_number: nequiPhone })).id;
+      setNequiPendingId(pendingId);
+      const approved = await pollWompiToken("/tokens/nequi", pendingId);
       setNequiTokenId(approved.id);
+      setNequiPendingId(null);
       setNequiStatus("approved");
     } catch (err) {
+      if (!(err instanceof TokenWaitTimeoutError)) setNequiPendingId(null);
       setNequiStatus("error");
       setNequiError((err as Error).message);
     }
+  };
+
+  const resetNequi = (phone: string) => {
+    setNequiPhone(phone);
+    setNequiTokenId(null);
+    setNequiPendingId(null);
+    setNequiStatus("idle");
+    setNequiError(null);
   };
 
   const handleAuthorizeBancolombia = async () => {
     setBcolError(null);
     setBcolStatus("verifying");
     try {
-      const created = await wompiPublicFetch("/tokens/bancolombia_transfer", {
-        redirect_url: `${window.location.origin}${redirectPath}`,
-        type_auth: "TOKEN",
-      });
-      const popup = window.open(created.authorization_url, "_blank", "width=480,height=720");
-      if (!popup) throw new Error("Habilita las ventanas emergentes en tu navegador para autorizar con Bancolombia.");
-      const approved = await pollWompiToken("/tokens/bancolombia_transfer", created.id);
+      let pendingId = bcolPendingId;
+      if (!pendingId) {
+        const created = await wompiPublicFetch("/tokens/bancolombia_transfer", {
+          redirect_url: `${window.location.origin}${redirectPath}`,
+          type_auth: "TOKEN",
+        });
+        const popup = window.open(created.authorization_url, "_blank", "width=480,height=720");
+        if (!popup) throw new Error("Habilita las ventanas emergentes en tu navegador para autorizar con Bancolombia.");
+        pendingId = created.id as string;
+        setBcolPendingId(pendingId);
+      }
+      const approved = await pollWompiToken("/tokens/bancolombia_transfer", pendingId);
       setBcolTokenId(approved.id);
+      setBcolPendingId(null);
       setBcolStatus("approved");
     } catch (err) {
+      if (!(err instanceof TokenWaitTimeoutError)) setBcolPendingId(null);
       setBcolStatus("error");
       setBcolError((err as Error).message);
     }
@@ -164,8 +195,8 @@ export function useWompiPaymentMethod(redirectPath: string) {
     paymentMethod, setPaymentMethod,
     cardNumber, setCardNumber, cardCvc, setCardCvc, cardExpMonth, setCardExpMonth,
     cardExpYear, setCardExpYear, cardHolder, setCardHolder,
-    nequiPhone, setNequiPhone, nequiStatus, setNequiStatus, nequiError, setNequiTokenId, handleVerifyNequi,
-    bcolStatus, bcolError, handleAuthorizeBancolombia,
+    nequiPhone, resetNequi, nequiStatus, nequiError, nequiPendingId, handleVerifyNequi,
+    bcolStatus, bcolError, bcolPendingId, handleAuthorizeBancolombia,
     isComplete, missingMessage, tokenize,
   };
 }
@@ -233,14 +264,14 @@ export function WompiPaymentMethodFields({ pm }: { pm: WompiPaymentMethodState }
                 maxLength={10}
                 placeholder="3001234567"
                 value={pm.nequiPhone}
-                onChange={(e) => { pm.setNequiPhone(e.target.value); pm.setNequiTokenId(null); pm.setNequiStatus("idle"); }}
+                onChange={(e) => pm.resetNequi(e.target.value)}
                 disabled={pm.nequiStatus === "verifying"}
               />
             </div>
           </div>
           <Button type="button" variant="outline" onClick={pm.handleVerifyNequi} disabled={pm.nequiStatus === "verifying" || pm.nequiStatus === "approved"}>
             {pm.nequiStatus === "verifying" && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-            {pm.nequiStatus === "approved" ? "Verificado" : "Verificar"}
+            {pm.nequiStatus === "approved" ? "Verificado" : pm.nequiPendingId ? "Ya aprobé, revisar de nuevo" : "Verificar"}
           </Button>
         </div>
         {pm.nequiStatus === "verifying" && (
@@ -261,7 +292,7 @@ export function WompiPaymentMethodFields({ pm }: { pm: WompiPaymentMethodState }
         </p>
         <Button type="button" variant="outline" onClick={pm.handleAuthorizeBancolombia} disabled={pm.bcolStatus === "verifying" || pm.bcolStatus === "approved"}>
           {pm.bcolStatus === "verifying" && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-          {pm.bcolStatus === "approved" ? "Autorizado" : "Autorizar con Bancolombia"}
+          {pm.bcolStatus === "approved" ? "Autorizado" : pm.bcolPendingId ? "Ya autoricé, revisar de nuevo" : "Autorizar con Bancolombia"}
         </Button>
         {pm.bcolStatus === "verifying" && (
           <p className="text-sm text-muted-foreground">Completa la autorización en la ventana emergente...</p>
