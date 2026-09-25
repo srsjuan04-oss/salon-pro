@@ -12,6 +12,17 @@
 // El webhook (wompi-webhook) es quien confirma el resultado y recién ahí
 // avanza next_charge_date / activa la suscripción; aquí solo se disparan los
 // cobros.
+//
+// Reintentos y suspensión: mientras el cobro no se aprueba, next_charge_date
+// no avanza y se reintenta cada día. Pasados GRACE_DAYS desde la fecha de
+// cobro se suspende el acceso (status=suspended) pero se sigue reintentando;
+// si un cobro se aprueba, el webhook la reactiva. Pasados MAX_RETRY_DAYS se
+// deja de cobrar y queda cancelada.
+//
+// Cobros PENDING (Nequi, Bancolombia): nunca se cobra de nuevo mientras haya
+// uno sin resolver. Se consulta su estado en Wompi (por si el webhook no
+// llegó) y, si sigue PENDING, se espera al día siguiente sin contar esos días
+// para la suspensión.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 function json(body: unknown, status = 200) {
@@ -27,6 +38,10 @@ const WOMPI_BASE = Deno.env.get("WOMPI_ENV") === "production"
 const WOMPI_PRIVATE_KEY = Deno.env.get("WOMPI_PRIVATE_KEY")!;
 const WOMPI_INTEGRITY_SECRET = Deno.env.get("WOMPI_INTEGRITY_SECRET")!;
 const CRON_SECRET = Deno.env.get("WOMPI_CRON_SECRET")!;
+
+const GRACE_DAYS = 4;
+const MAX_RETRY_DAYS = 30;
+const FAILED_STATUSES = ["DECLINED", "ERROR", "VOIDED"];
 
 async function sha256Hex(input: string): Promise<string> {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
@@ -49,6 +64,21 @@ async function chargeWompi(payload: Record<string, unknown>) {
   return body.data;
 }
 
+async function getWompiTransaction(id: string) {
+  const res = await fetch(`${WOMPI_BASE}/transactions/${id}`, {
+    headers: { Authorization: `Bearer ${WOMPI_PRIVATE_KEY}` },
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(body?.error?.reason ?? body?.error?.type ?? res.statusText);
+  }
+  return body.data;
+}
+
+function daysBetween(fromDate: string, toDate: string): number {
+  return Math.floor((Date.parse(toDate) - Date.parse(fromDate)) / 86_400_000);
+}
+
 Deno.serve(async (req) => {
   const providedSecret = req.headers.get("x-cron-secret") ?? "";
   if (!CRON_SECRET || providedSecret !== CRON_SECRET) {
@@ -61,8 +91,8 @@ Deno.serve(async (req) => {
   const today = new Date().toISOString().slice(0, 10);
   const { data: due, error: dueError } = await admin
     .from("organization_subscriptions")
-    .select("id, plan_code, amount_in_cents, payment_source_type, wompi_payment_source_id, customer_email, cancel_at_period_end")
-    .in("status", ["trialing", "active", "past_due"])
+    .select("id, status, plan_code, amount_in_cents, payment_source_type, wompi_payment_source_id, customer_email, cancel_at_period_end, next_charge_date, failed_attempts")
+    .in("status", ["trialing", "active", "past_due", "suspended"])
     .lte("next_charge_date", today);
   if (dueError) return json({ error: dueError.message }, 500);
 
@@ -83,6 +113,71 @@ Deno.serve(async (req) => {
         if (cancelError) throw new Error(cancelError.message);
         results.push({ subscription_id: sub.id, ok: true, detail: "canceled_at_period_end" });
         continue;
+      }
+
+      // Un cobro anterior sigue sin resolver: no se cobra de nuevo. Se
+      // consulta a Wompi por si el webhook no llegó.
+      const { data: pending } = await admin
+        .from("subscription_payments")
+        .select("id, wompi_transaction_id")
+        .eq("subscription_id", sub.id)
+        .eq("kind", "subscription")
+        .eq("status", "PENDING")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (pending) {
+        const pendingTx = await getWompiTransaction(pending.wompi_transaction_id);
+        const pendingStatus = String(pendingTx?.status ?? "PENDING");
+        if (pendingStatus === "PENDING") {
+          results.push({ subscription_id: sub.id, ok: true, detail: "waiting_pending_payment" });
+          continue;
+        }
+        await admin
+          .from("subscription_payments")
+          .update({ status: pendingStatus, raw_response: pendingTx })
+          .eq("id", pending.id);
+        if (pendingStatus === "APPROVED") {
+          const nextChargeDate = new Date();
+          nextChargeDate.setMonth(nextChargeDate.getMonth() + 1);
+          await admin
+            .from("organization_subscriptions")
+            .update({
+              status: "active",
+              next_charge_date: nextChargeDate.toISOString().slice(0, 10),
+              failed_attempts: 0,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", sub.id);
+          results.push({ subscription_id: sub.id, ok: true, detail: "pending_payment_approved" });
+          continue;
+        }
+        if (FAILED_STATUSES.includes(pendingStatus)) {
+          sub.failed_attempts = (sub.failed_attempts ?? 0) + 1;
+          if (sub.status !== "suspended") sub.status = "past_due";
+          await admin
+            .from("organization_subscriptions")
+            .update({ status: sub.status, failed_attempts: sub.failed_attempts, updated_at: new Date().toISOString() })
+            .eq("id", sub.id);
+        }
+      }
+
+      const daysOverdue = daysBetween(sub.next_charge_date, today);
+      if (daysOverdue >= MAX_RETRY_DAYS) {
+        const { error: cancelError } = await admin
+          .from("organization_subscriptions")
+          .update({ status: "canceled", next_charge_date: null, updated_at: new Date().toISOString() })
+          .eq("id", sub.id);
+        if (cancelError) throw new Error(cancelError.message);
+        results.push({ subscription_id: sub.id, ok: true, detail: "canceled_after_max_retries" });
+        continue;
+      }
+      if (daysOverdue >= GRACE_DAYS && sub.status !== "suspended") {
+        const { error: suspendError } = await admin
+          .from("organization_subscriptions")
+          .update({ status: "suspended", updated_at: new Date().toISOString() })
+          .eq("id", sub.id);
+        if (suspendError) throw new Error(suspendError.message);
       }
 
       if (!sub.wompi_payment_source_id) throw new Error("Sin payment_source_id");
@@ -117,7 +212,7 @@ Deno.serve(async (req) => {
 
       // Primer cobro real de esta suscripción (fin de la prueba gratis, o
       // primera vez que se factura): también cobra la implementación, si
-      // el plan la tiene y todavía no se ha cobrado nunca.
+      // el plan la tiene y todavía no se ha cobrado (ni está en curso).
       const implementationFeeCents = implementationFeeByPlan.get(sub.plan_code) ?? 0;
       if (implementationFeeCents > 0) {
         const { data: alreadyCharged } = await admin
@@ -125,7 +220,7 @@ Deno.serve(async (req) => {
           .select("id")
           .eq("subscription_id", sub.id)
           .eq("kind", "implementation_fee")
-          .eq("status", "APPROVED")
+          .in("status", ["APPROVED", "PENDING"])
           .limit(1)
           .maybeSingle();
 

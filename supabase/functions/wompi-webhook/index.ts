@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
 
     const { data: payment, error: findError } = await admin
       .from("subscription_payments")
-      .select("id, subscription_id, kind")
+      .select("id, subscription_id, kind, status")
       .eq("reference", reference)
       .maybeSingle();
     if (findError) throw new Error(findError.message);
@@ -84,6 +84,12 @@ Deno.serve(async (req) => {
       return json({ received: true });
     }
 
+    // Evento repetido (Wompi reintenta), o el cron ya resolvió este cobro
+    // PENDING consultando a Wompi: la suscripción ya quedó actualizada.
+    if (payment.status === status) {
+      return json({ received: true, duplicate: true });
+    }
+
     if (status === "APPROVED") {
       const nextChargeDate = new Date();
       nextChargeDate.setMonth(nextChargeDate.getMonth() + 1);
@@ -97,16 +103,18 @@ Deno.serve(async (req) => {
         })
         .eq("id", payment.subscription_id);
       if (subUpdateError) throw new Error(subUpdateError.message);
-    } else if (status === "DECLINED" || status === "ERROR") {
+    } else if (status === "DECLINED" || status === "ERROR" || status === "VOIDED") {
       const { data: sub } = await admin
         .from("organization_subscriptions")
-        .select("failed_attempts")
+        .select("status, failed_attempts")
         .eq("id", payment.subscription_id)
         .maybeSingle();
+      if (sub?.status === "canceled") return json({ received: true });
       const { error: subUpdateError } = await admin
         .from("organization_subscriptions")
         .update({
-          status: "past_due",
+          // Una suscripción ya suspendida sigue suspendida hasta que un cobro se apruebe.
+          status: sub?.status === "suspended" ? "suspended" : "past_due",
           failed_attempts: (sub?.failed_attempts ?? 0) + 1,
           updated_at: new Date().toISOString(),
         })

@@ -1,3 +1,4 @@
+import { useSearchParams } from "react-router-dom";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +27,8 @@ import {
 
 
 export default function SettingsPage() {
+  // ?tab=billing abre "Mi plan" directo (ej. desde la pantalla de acceso pausado por falta de pago).
+  const [searchParams] = useSearchParams();
   return (
     <DashboardLayout>
       <div className="space-y-6 max-w-4xl">
@@ -37,7 +40,7 @@ export default function SettingsPage() {
           </p>
         </div>
 
-        <Tabs defaultValue="general" className="space-y-6">
+        <Tabs defaultValue={searchParams.get("tab") ?? "general"} className="space-y-6">
           <TabsList className="bg-secondary/50 p-1">
             <TabsTrigger value="general" className="gap-2">
               <Building2 className="w-4 h-4" />

@@ -140,6 +140,21 @@ Deno.serve(async (req) => {
 
     const admin = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
+    // La prueba gratis es solo para organizaciones nuevas: si ya tuvo una
+    // suscripción (incluso cancelada o suspendida por falta de pago), el medio
+    // de pago se cambia/reactiva desde Configuración, con cobro inmediato
+    // (wompi-update-payment-method).
+    const { data: existing } = await admin
+      .from("organization_subscriptions")
+      .select("status")
+      .eq("organization_id", orgId)
+      .maybeSingle();
+    if (existing && existing.status !== "pending_payment") {
+      return json({
+        error: "Tu negocio ya tiene una suscripción. Para cambiar el medio de pago o reactivarla, inicia sesión y ve a Configuración → Mi plan.",
+      }, 409);
+    }
+
     const { data: plan, error: planError } = await admin
       .from("subscription_plans")
       .select("code, amount_in_cents, currency")

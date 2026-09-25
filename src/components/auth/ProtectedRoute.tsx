@@ -10,7 +10,7 @@ interface ProtectedRouteProps {
   requirePlatformAdmin?: boolean;
   /** Esta ruta no es parte de la vista restringida de un barbero (solo Calendario). */
   hideFromBarber?: boolean;
-  /** Deja pasar aunque la suscripción esté cancelada (ej. Configuración, para poder reactivarla). */
+  /** Deja pasar aunque la suscripción esté cancelada o suspendida (ej. Configuración, para poder reactivarla). */
   allowWhenCanceled?: boolean;
 }
 
@@ -21,7 +21,7 @@ export function ProtectedRoute({
   hideFromBarber = false,
   allowWhenCanceled = false,
 }: ProtectedRouteProps) {
-  const { isAuthenticated, isStaff, isBarber, isAdmin, isPlatformAdmin, isSubscriptionCanceled, loading } = useAuth();
+  const { isAuthenticated, isStaff, isBarber, isAdmin, isPlatformAdmin, isSubscriptionCanceled, isSubscriptionSuspended, loading } = useAuth();
 
   if (loading) {
     return (
@@ -75,7 +75,23 @@ export function ProtectedRoute({
             El acceso de tu negocio a CharlIA fue suspendido. Reactiva tu suscripción desde Configuración para volver a usar la app.
           </p>
           <Button asChild className="gradient-gold shadow-gold">
-            <Link to="/settings">Ir a Configuración</Link>
+            <Link to="/settings?tab=billing">Ir a Mi plan</Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (isSubscriptionSuspended && !allowWhenCanceled) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <div className="text-center space-y-4 max-w-sm">
+          <h1 className="text-2xl font-bold text-foreground">Acceso pausado por falta de pago</h1>
+          <p className="text-muted-foreground">
+            No pudimos cobrar la mensualidad de tu negocio. Seguiremos intentando el cobro automáticamente cada día: asegúrate de que tu medio de pago tenga fondos, o paga ahora con otro desde Configuración. El acceso se reactiva en cuanto se apruebe el pago.
+          </p>
+          <Button asChild className="gradient-gold shadow-gold">
+            <Link to="/settings?tab=billing">Pagar ahora</Link>
           </Button>
         </div>
       </div>

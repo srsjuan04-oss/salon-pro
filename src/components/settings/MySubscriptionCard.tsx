@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { AlertCircle, CheckCircle2, Clock, Loader2, XCircle } from "lucide-react";
 import { toast } from "sonner";
+import { UpdatePaymentMethodDialog } from "./UpdatePaymentMethodDialog";
 
 interface MySubscription {
   plan_code: string;
@@ -23,7 +24,15 @@ interface MySubscription {
   status: string;
   next_charge_date: string | null;
   cancel_at_period_end: boolean;
+  payment_source_type: string | null;
 }
+
+const PAYMENT_LABEL: Record<string, string> = {
+  CARD: "Tarjeta",
+  NEQUI: "Nequi",
+  DAVIPLATA: "DaviPlata",
+  BANCOLOMBIA_TRANSFER: "Bancolombia",
+};
 
 const currency = new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 });
 
@@ -32,6 +41,7 @@ const STATUS_INFO: Record<string, { label: string; className: string; icon: type
   active: { label: "Activa", className: "bg-success/10 text-success border-success/20", icon: CheckCircle2 },
   pending_payment: { label: "Pago pendiente", className: "bg-warning/10 text-warning border-warning/20", icon: AlertCircle },
   past_due: { label: "Cobro fallido", className: "bg-destructive/10 text-destructive border-destructive/20", icon: XCircle },
+  suspended: { label: "Suspendida por falta de pago", className: "bg-destructive/10 text-destructive border-destructive/20", icon: XCircle },
   canceled: { label: "Cancelada", className: "bg-secondary text-secondary-foreground", icon: XCircle },
 };
 
@@ -93,7 +103,14 @@ export function MySubscriptionCard() {
   }
 
   const statusInfo = STATUS_INFO[subscription.status] ?? STATUS_INFO.canceled;
-  const canCancel = ["trialing", "active", "past_due"].includes(subscription.status);
+  const canCancel = ["trialing", "active", "past_due", "suspended"].includes(subscription.status);
+  const today = new Date().toISOString().slice(0, 10);
+  // Mismo criterio que wompi-update-payment-method: con un cobro vencido (o la
+  // suscripción cancelada), cambiar el medio de pago cobra de inmediato.
+  const chargeNow =
+    ["past_due", "suspended", "canceled"].includes(subscription.status) ||
+    (subscription.next_charge_date !== null && subscription.next_charge_date <= today);
+  const amountLabel = currency.format(subscription.amount_in_cents / 100);
 
   return (
     <div className="bg-card rounded-2xl border shadow-soft p-6 space-y-6">
@@ -126,8 +143,37 @@ export function MySubscriptionCard() {
       {!subscription.cancel_at_period_end && subscription.status === "active" && subscription.next_charge_date && (
         <p className="text-sm text-muted-foreground">Próximo cobro: {subscription.next_charge_date}</p>
       )}
+      {!subscription.cancel_at_period_end && subscription.status === "past_due" && (
+        <p className="text-sm text-destructive">
+          No pudimos cobrar tu mensualidad. Lo intentaremos de nuevo cada día; si no se aprueba en 4 días se pausará el acceso a la app. También puedes pagar ahora con otro medio de pago.
+        </p>
+      )}
+      {!subscription.cancel_at_period_end && subscription.status === "suspended" && (
+        <p className="text-sm text-destructive">
+          Tu acceso está pausado por falta de pago. Seguimos intentando el cobro cada día, o puedes pagar ahora con otro medio de pago y el acceso vuelve en cuanto se apruebe.
+        </p>
+      )}
 
-      <div className="flex gap-2">
+      {subscription.payment_source_type && (
+        <p className="text-sm text-muted-foreground">
+          Medio de pago: {PAYMENT_LABEL[subscription.payment_source_type] ?? subscription.payment_source_type}
+        </p>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        {subscription.status !== "pending_payment" && (
+          <UpdatePaymentMethodDialog
+            chargeNow={chargeNow}
+            amountLabel={amountLabel}
+            triggerLabel={
+              subscription.status === "canceled"
+                ? "Reactivar con un medio de pago"
+                : chargeNow
+                  ? "Pagar con otro medio de pago"
+                  : "Actualizar medio de pago"
+            }
+          />
+        )}
         {canCancel && !subscription.cancel_at_period_end && (
           <AlertDialog>
             <AlertDialogTrigger asChild>

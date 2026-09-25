@@ -10,6 +10,7 @@ export function useAuth() {
   const [role, setRole] = useState<UserRole>(null);
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [isSubscriptionCanceled, setIsSubscriptionCanceled] = useState(false);
+  const [isSubscriptionSuspended, setIsSubscriptionSuspended] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -28,6 +29,7 @@ export function useAuth() {
           setRole(null);
           setIsPlatformAdmin(false);
           setIsSubscriptionCanceled(false);
+          setIsSubscriptionSuspended(false);
           setLoading(false);
         }
       }
@@ -66,14 +68,16 @@ export function useAuth() {
       // Sin fila de suscripción (orgs creadas antes de este sistema, o el
       // admin de plataforma) = acceso sin restricción. Solo bloquea cuando
       // la organización tiene una suscripción y quedó explícitamente
-      // 'canceled' (ver wompi-charge-subscriptions).
+      // 'canceled', o 'suspended' por falta de pago (ver wompi-charge-subscriptions).
       const subscription = Array.isArray(subscriptionRows) ? subscriptionRows[0] : null;
       setIsSubscriptionCanceled(!platformAdmin && subscription?.status === "canceled");
+      setIsSubscriptionSuspended(!platformAdmin && subscription?.status === "suspended");
     } catch (err) {
       console.error("Error fetching role:", err);
       setRole(null);
       setIsPlatformAdmin(false);
       setIsSubscriptionCanceled(false);
+      setIsSubscriptionSuspended(false);
     } finally {
       setLoading(false);
     }
@@ -118,6 +122,7 @@ export function useAuth() {
     isBarber: role === "barber",
     isPlatformAdmin,
     isSubscriptionCanceled,
+    isSubscriptionSuspended,
     signIn,
     signUp,
     signOut,

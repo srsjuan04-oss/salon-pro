@@ -9,17 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle2, AlertCircle, RefreshCw, Save, MessageSquare, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-
-/** Mensaje real que devolvió whapify-proxy: ante un status no-2xx, supabase-js solo expone
- * "Edge Function returned a non-2xx status code" y el cuerpo queda en `error.context`. */
-async function functionErrorMessage(error: unknown, fallback: string): Promise<string> {
-  const context = (error as { context?: Response } | null)?.context;
-  if (context && typeof context.json === "function") {
-    const body = await context.json().catch(() => null);
-    if (body?.error && typeof body.error === "string") return body.error;
-  }
-  return fallback;
-}
+import { functionErrorMessage } from "@/lib/edge-functions";
 
 const REMINDER_UNITS = { minutes: 1, hours: 60, days: 1440 } as const;
 type ReminderUnit = keyof typeof REMINDER_UNITS;

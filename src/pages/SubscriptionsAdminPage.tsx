@@ -40,6 +40,7 @@ const STATUS_BADGE: Record<string, { label: string; className: string; icon: typ
   active: { label: "Activa", className: "bg-success/10 text-success border-success/20", icon: CheckCircle2 },
   pending_payment: { label: "Pago pendiente", className: "bg-warning/10 text-warning border-warning/20", icon: AlertCircle },
   past_due: { label: "Cobro fallido", className: "bg-destructive/10 text-destructive border-destructive/20", icon: XCircle },
+  suspended: { label: "Suspendida por falta de pago", className: "bg-destructive/10 text-destructive border-destructive/20", icon: XCircle },
   canceled: { label: "Cancelada", className: "bg-secondary text-secondary-foreground", icon: XCircle },
 };
 
@@ -137,7 +138,7 @@ export default function SubscriptionsAdminPage() {
           <div className="space-y-3">
             {subscriptions.map((sub) => {
               const statusInfo = STATUS_BADGE[sub.status] ?? STATUS_BADGE.canceled;
-              const canCancel = ["trialing", "active", "past_due"].includes(sub.status);
+              const canCancel = ["trialing", "active", "past_due", "suspended"].includes(sub.status);
               return (
                 <div
                   key={sub.subscription_id}

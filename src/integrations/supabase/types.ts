@@ -1655,6 +1655,7 @@ export type Database = {
           amount_in_cents: number
           cancel_at_period_end: boolean
           next_charge_date: string
+          payment_source_type: string
           plan_code: string
           plan_name: string
           status: string
