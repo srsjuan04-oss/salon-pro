@@ -7,7 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, AlertCircle, RefreshCw, Save, MessageSquare, Plus, Trash2 } from "lucide-react";
+import { CheckCircle2, AlertCircle, RefreshCw, Save, MessageSquare, Plus, Trash2, ChevronDown } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { toast } from "sonner";
 import { functionErrorMessage } from "@/lib/edge-functions";
 
@@ -221,78 +222,30 @@ export function WhapifySettingsCard() {
 
   const hasToken = Boolean(settings?.whapify_token);
   const isActive = Boolean(settings?.is_active);
+  const anyConfigured = reminders.some((r) => r.webhook_url || r.whapify_flow_id);
 
   return (
     <div className="space-y-6">
-      {/* Connection */}
-      <div className="bg-card rounded-2xl border shadow-soft p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-lg font-semibold flex items-center gap-2">
-              <MessageSquare className="w-5 h-5" />
-              Configuración Gestor de WhatsApp
-            </h3>
-            <p className="text-sm text-muted-foreground">Conecta tu cuenta para enviar recordatorios automáticos</p>
-          </div>
-          {hasToken && (
-            <Badge variant={isActive ? "default" : "destructive"} className="gap-1">
-              {isActive ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
-              {isActive ? "Conectado" : "Inválido"}
-            </Badge>
-          )}
-        </div>
-
-        {hasToken && (
-          <div className="p-3 rounded-lg bg-secondary/50 flex items-center justify-between">
-            <div>
-              <p className="text-xs text-muted-foreground">Token actual</p>
-              <p className="font-mono text-sm">{maskToken(settings?.whapify_token)}</p>
-            </div>
-            <div className="text-right text-xs text-muted-foreground">
-              {settings?.last_validated_at && <p>Validado: {new Date(settings.last_validated_at).toLocaleString()}</p>}
-              {settings?.last_synced_at && <p>Sincronizado: {new Date(settings.last_synced_at).toLocaleString()}</p>}
-            </div>
-          </div>
-        )}
-
-        <div className="space-y-2">
-          <Label>{hasToken ? "Actualizar token" : "Token de Gestor de WhatsApp"}</Label>
-          <div className="flex gap-2">
-            <Input
-              type="password"
-              placeholder="Pega tu token aquí"
-              value={tokenInput}
-              onChange={(e) => setTokenInput(e.target.value)}
-            />
-            <Button onClick={() => saveToken.mutate()} disabled={!tokenInput.trim() || saveToken.isPending} className="gap-2">
-              <Save className="w-4 h-4" /> Guardar
-            </Button>
-          </div>
-        </div>
-
-        {hasToken && (
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => validate.mutate()} disabled={validate.isPending}>
-              Validar conexión
-            </Button>
-            <Button variant="outline" onClick={() => syncFlows.mutate()} disabled={!isActive || syncFlows.isPending} className="gap-2">
-              <RefreshCw className={`w-4 h-4 ${syncFlows.isPending ? "animate-spin" : ""}`} /> Consultar Flows ({flows.length})
-            </Button>
-          </div>
-        )}
-      </div>
-
       {/* Reminder settings */}
       <div className="bg-card rounded-2xl border shadow-soft p-6 space-y-4">
         <div>
-          <h3 className="text-lg font-semibold">Recordatorios automáticos</h3>
-          <p className="text-sm text-muted-foreground">Asigna un Flow de Gestor de WhatsApp a cada recordatorio</p>
+          <h3 className="text-lg font-semibold flex items-center gap-2">
+            <MessageSquare className="w-5 h-5" />
+            Recordatorios automáticos
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            Se envían por WhatsApp a tus clientes antes de cada cita, con plantillas aprobadas por Meta.
+          </p>
         </div>
 
-        {!isActive && (
-          <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-sm">
-            Para usar un Flow de Gestor de WhatsApp, primero conecta un token válido arriba. Si envías los
-            recordatorios por Chat CharlIA (webhook), no necesitas Gestor de WhatsApp.
+        {!anyConfigured && (
+          <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 text-sm space-y-1">
+            <p className="font-medium">Cómo activarlos</p>
+            <ol className="list-decimal pl-5 space-y-0.5 text-muted-foreground">
+              <li>En Chat CharlIA entra a <strong>Complementos → Recordatorios de cita</strong> y copia la URL.</li>
+              <li>Pégala abajo en el recordatorio y dale Guardar.</li>
+              <li>Elige la plantilla de Meta y enciende el recordatorio.</li>
+            </ol>
           </div>
         )}
 
@@ -300,14 +253,18 @@ export function WhapifySettingsCard() {
           {reminders.map((r) => {
             const configured = Boolean(r.whapify_flow_id) || Boolean(r.webhook_url);
             const webhookDraft = webhookDrafts[r.id] ?? r.webhook_url ?? "";
+            // El Flow de Gestor de WhatsApp solo se ofrece a quien ya lo usa o lo conectó abajo.
+            const showFlow = isActive || Boolean(r.whapify_flow_id);
             return (
               <div key={r.id} className="p-4 rounded-xl border bg-secondary/30 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="font-medium">{formatReminderOffset(r.minutes_before)} antes de la cita</p>
-                    <p className="text-xs text-muted-foreground">
-                      Canal: {r.webhook_url ? "Chat CharlIA" : "Gestor de WhatsApp"}
-                    </p>
+                    {configured && (
+                      <p className="text-xs text-muted-foreground">
+                        Canal: {r.webhook_url ? "Chat CharlIA" : "Gestor de WhatsApp"}
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     {configured ? (
@@ -337,10 +294,10 @@ export function WhapifySettingsCard() {
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-xs">Webhook de Chat CharlIA (recomendado — plantillas reales de Meta)</Label>
+                  <Label className="text-xs">URL de Chat CharlIA</Label>
                   <div className="flex gap-2">
                     <Input
-                      placeholder="https://.../api/webhooks/appointment-reminder/…"
+                      placeholder="https://chat.charliacrm.com/api/webhooks/appointment-reminder/…"
                       value={webhookDraft}
                       onChange={(e) => setWebhookDrafts((prev) => ({ ...prev, [r.id]: e.target.value }))}
                     />
@@ -352,32 +309,36 @@ export function WhapifySettingsCard() {
                       Guardar
                     </Button>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Si se configura, este recordatorio se envía por Chat CharlIA en vez de Gestor de WhatsApp.
-                  </p>
                 </div>
 
                 {r.webhook_url && <ChatCharliaTemplatePicker webhookUrl={r.webhook_url} />}
 
-                <div className="space-y-1">
-                  <Label className="text-xs">Flow de Gestor de WhatsApp (alternativa)</Label>
-                  <Select
-                    value={r.whapify_flow_id ?? ""}
-                    onValueChange={(v) => updateReminder.mutate({ id: r.id, patch: { whapify_flow_id: v || null } })}
-                    disabled={flows.length === 0}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={flows.length ? "Selecciona un flow" : "Sincroniza flows primero"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {flows.map((f) => (
-                        <SelectItem key={f.flow_id} value={f.flow_id}>
-                          {f.flow_name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                {showFlow && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">Flow de Gestor de WhatsApp (alternativa)</Label>
+                    <Select
+                      value={r.whapify_flow_id ?? ""}
+                      onValueChange={(v) => updateReminder.mutate({ id: r.id, patch: { whapify_flow_id: v || null } })}
+                      disabled={flows.length === 0}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={flows.length ? "Selecciona un flow" : "Sincroniza flows primero"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {flows.map((f) => (
+                          <SelectItem key={f.flow_id} value={f.flow_id}>
+                            {f.flow_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {r.webhook_url && (
+                      <p className="text-xs text-muted-foreground">
+                        Mientras haya URL de Chat CharlIA, el recordatorio se envía por Chat CharlIA y no por este flow.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -414,6 +375,68 @@ export function WhapifySettingsCard() {
           </div>
         </div>
       </div>
+
+      {/* Gestor de WhatsApp: canal viejo, opcional. Abierto solo si el salón ya lo tiene conectado. */}
+      <Collapsible defaultOpen={hasToken} className="bg-card rounded-2xl border shadow-soft p-6">
+        <CollapsibleTrigger className="group flex w-full items-center justify-between text-left">
+          <div>
+            <h3 className="text-lg font-semibold">Gestor de WhatsApp (opcional)</h3>
+            <p className="text-sm text-muted-foreground">
+              Solo si envías los recordatorios con Flows de Gestor de WhatsApp en vez de Chat CharlIA.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {hasToken && (
+              <Badge variant={isActive ? "default" : "destructive"} className="gap-1">
+                {isActive ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
+                {isActive ? "Conectado" : "Inválido"}
+              </Badge>
+            )}
+            <ChevronDown className="w-4 h-4 transition-transform group-data-[state=open]:rotate-180" />
+          </div>
+        </CollapsibleTrigger>
+
+        <CollapsibleContent className="space-y-4 pt-4">
+          {hasToken && (
+            <div className="p-3 rounded-lg bg-secondary/50 flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">Token actual</p>
+                <p className="font-mono text-sm">{maskToken(settings?.whapify_token)}</p>
+              </div>
+              <div className="text-right text-xs text-muted-foreground">
+                {settings?.last_validated_at && <p>Validado: {new Date(settings.last_validated_at).toLocaleString()}</p>}
+                {settings?.last_synced_at && <p>Sincronizado: {new Date(settings.last_synced_at).toLocaleString()}</p>}
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label>{hasToken ? "Actualizar token" : "Token de Gestor de WhatsApp"}</Label>
+            <div className="flex gap-2">
+              <Input
+                type="password"
+                placeholder="Pega tu token aquí"
+                value={tokenInput}
+                onChange={(e) => setTokenInput(e.target.value)}
+              />
+              <Button onClick={() => saveToken.mutate()} disabled={!tokenInput.trim() || saveToken.isPending} className="gap-2">
+                <Save className="w-4 h-4" /> Guardar
+              </Button>
+            </div>
+          </div>
+
+          {hasToken && (
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => validate.mutate()} disabled={validate.isPending}>
+                Validar conexión
+              </Button>
+              <Button variant="outline" onClick={() => syncFlows.mutate()} disabled={!isActive || syncFlows.isPending} className="gap-2">
+                <RefreshCw className={`w-4 h-4 ${syncFlows.isPending ? "animate-spin" : ""}`} /> Consultar Flows ({flows.length})
+              </Button>
+            </div>
+          )}
+        </CollapsibleContent>
+      </Collapsible>
     </div>
   );
 }
