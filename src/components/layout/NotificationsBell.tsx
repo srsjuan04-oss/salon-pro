@@ -3,7 +3,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Bell, Calendar, CalendarX, CheckCheck } from "lucide-react";
+import { Bell, BellRing, Calendar, CalendarX, CheckCheck, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 interface Notification {
   id: string;
@@ -23,6 +25,54 @@ function timeAgo(dateStr: string) {
   if (hours < 24) return `hace ${hours} h`;
   const days = Math.floor(hours / 24);
   return `hace ${days} d`;
+}
+
+function PushNotificationsToggle() {
+  const { status, busy, enable, disable } = usePushNotifications();
+
+  if (status === "loading" || status === "unsupported") return null;
+
+  if (status === "needs-install") {
+    return (
+      <p className="text-xs text-muted-foreground">
+        Para recibir avisos en el iPhone: en Safari toca Compartir → "Agregar a inicio" y abre CharlIA desde ese ícono.
+      </p>
+    );
+  }
+
+  if (status === "denied") {
+    return (
+      <p className="text-xs text-muted-foreground">
+        Bloqueaste las notificaciones. Actívalas en los Ajustes del teléfono para CharlIA.
+      </p>
+    );
+  }
+
+  const onClick = async () => {
+    try {
+      if (status === "enabled") {
+        await disable();
+        toast.success("Notificaciones desactivadas en este dispositivo");
+      } else if (await enable()) {
+        toast.success("Listo, te avisaremos en este dispositivo");
+      }
+    } catch (err) {
+      toast.error((err as Error).message || "No se pudieron activar las notificaciones");
+    }
+  };
+
+  return (
+    <Button
+      variant={status === "enabled" ? "ghost" : "secondary"}
+      size="sm"
+      className="w-full gap-2 text-xs"
+      onClick={onClick}
+      disabled={busy}
+    >
+      {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <BellRing className="w-3.5 h-3.5" />}
+      {status === "enabled" ? "Desactivar avisos en este dispositivo" : "Activar avisos en este dispositivo"}
+    </Button>
+  );
 }
 
 export function NotificationsBell() {
@@ -117,6 +167,9 @@ export function NotificationsBell() {
             </div>
           )}
         </ScrollArea>
+        <div className="border-t px-4 py-3">
+          <PushNotificationsToggle />
+        </div>
       </PopoverContent>
     </Popover>
   );

@@ -723,6 +723,7 @@ export type Database = {
           message: string
           organization_id: string
           read: boolean
+          recipient_user_id: string | null
           title: string
           type: string
         }
@@ -733,6 +734,7 @@ export type Database = {
           message: string
           organization_id: string
           read?: boolean
+          recipient_user_id?: string | null
           title: string
           type: string
         }
@@ -743,6 +745,7 @@ export type Database = {
           message?: string
           organization_id?: string
           read?: boolean
+          recipient_user_id?: string | null
           title?: string
           type?: string
         }
@@ -1647,6 +1650,19 @@ export type Database = {
       }
       generate_appointment_reminders: {
         Args: { _appointment_id: string }
+        Returns: undefined
+      }
+      register_push_subscription: {
+        Args: {
+          _auth: string
+          _endpoint: string
+          _p256dh: string
+          _user_agent?: string
+        }
+        Returns: undefined
+      }
+      unregister_push_subscription: {
+        Args: { _endpoint: string }
         Returns: undefined
       }
       get_my_subscription: {
